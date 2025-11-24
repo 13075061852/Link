@@ -246,22 +246,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Populate category select dropdown
 function populateCategorySelect(store, selectedId = null) {
-    const categorySelect = document.getElementById('link-category');
+    const categoryOptionsContainer = document.getElementById('link-category-options');
+    const hiddenInput = document.getElementById('link-category');
     
-    // Clear existing options except the default
-    categorySelect.innerHTML = '<option value="uncategorized">未分类</option>';
+    // Clear existing options
+    categoryOptionsContainer.innerHTML = '';
+    
+    // Add "未分类" option
+    const uncategorizedBtn = document.createElement('button');
+    uncategorizedBtn.type = 'button';
+    uncategorizedBtn.className = 'category-option px-3 py-2 rounded-lg border text-sm transition-all ' + 
+        (selectedId === null || selectedId === 'uncategorized' ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
+    uncategorizedBtn.textContent = '未分类';
+    uncategorizedBtn.dataset.categoryId = 'uncategorized';
+    
+    uncategorizedBtn.addEventListener('click', () => {
+        // Update hidden input
+        hiddenInput.value = 'uncategorized';
+        
+        // Update UI
+        document.querySelectorAll('.category-option').forEach(btn => {
+            btn.classList.remove('bg-accent', 'text-white', 'border-accent');
+            btn.classList.add('bg-surface', 'border-border', 'text-textMain');
+        });
+        
+        uncategorizedBtn.classList.remove('bg-surface', 'border-border', 'text-textMain');
+        uncategorizedBtn.classList.add('bg-accent', 'text-white', 'border-accent');
+    });
+    
+    categoryOptionsContainer.appendChild(uncategorizedBtn);
     
     // Add category options
     const categories = store.getCategories();
     categories.forEach(category => {
-        const option = document.createElement('option');
-        option.value = category.id;
-        option.textContent = category.name;
-        if (selectedId && selectedId === category.id) {
-            option.selected = true;
-        }
-        categorySelect.appendChild(option);
+        const categoryBtn = document.createElement('button');
+        categoryBtn.type = 'button';
+        categoryBtn.className = 'category-option px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ' + 
+            (selectedId && selectedId === category.id ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
+        categoryBtn.innerHTML = `<i data-lucide="${category.icon}" class="w-4 h-4"></i><span>${category.name}</span>`;
+        categoryBtn.dataset.categoryId = category.id;
+        
+        categoryBtn.addEventListener('click', () => {
+            // Update hidden input
+            hiddenInput.value = category.id;
+            
+            // Update UI
+            document.querySelectorAll('.category-option').forEach(btn => {
+                btn.classList.remove('bg-accent', 'text-white', 'border-accent');
+                btn.classList.add('bg-surface', 'border-border', 'text-textMain');
+            });
+            
+            categoryBtn.classList.remove('bg-surface', 'border-border', 'text-textMain');
+            categoryBtn.classList.add('bg-accent', 'text-white', 'border-accent');
+            
+            lucide.createIcons();
+        });
+        
+        categoryOptionsContainer.appendChild(categoryBtn);
     });
+    
+    // Set initial value if no category is selected
+    if (!selectedId) {
+        hiddenInput.value = 'uncategorized';
+    }
+    
+    lucide.createIcons();
 }
 
 // Render category navigation
@@ -349,8 +398,18 @@ function renderCategoryList(store) {
     const categoryList = document.getElementById('category-list');
     const categories = store.getCategories();
     
-    categoryList.innerHTML = categories.map(category => `
-        <div class="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
+    // Clear the container
+    categoryList.innerHTML = '';
+    
+    // Create a grid container for category items
+    const gridContainer = document.createElement('div');
+    gridContainer.className = 'grid grid-cols-3 gap-3';
+    
+    categories.forEach(category => {
+        const categoryItem = document.createElement('div');
+        categoryItem.className = 'flex items-center justify-between p-3 bg-surface rounded-lg border border-border';
+        
+        categoryItem.innerHTML = `
             <div class="flex items-center gap-2">
                 <i data-lucide="${category.icon}" class="w-4 h-4 text-textMuted"></i>
                 <span class="text-textMain">${category.name}</span>
@@ -358,8 +417,12 @@ function renderCategoryList(store) {
             <button data-id="${category.id}" class="btn-delete-category p-1 text-textMuted hover:text-red-500 transition-colors" title="删除分类">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
-        </div>
-    `).join('');
+        `;
+        
+        gridContainer.appendChild(categoryItem);
+    });
+    
+    categoryList.appendChild(gridContainer);
     
     // Add event listeners to delete buttons
     document.querySelectorAll('.btn-delete-category').forEach(btn => {
