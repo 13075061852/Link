@@ -30,11 +30,11 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
-<body class="bg-background text-textMain transition-colors duration-300 min-h-screen selection:bg-accent selection:text-white antialiased">
+<body class="bg-background text-textMain transition-colors duration-300 h-screen overflow-hidden selection:bg-accent selection:text-white antialiased">
 
     <div class="fixed inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] mask-fade"></div>
 
-    <div class="flex flex-col min-h-screen">
+    <div class="flex h-screen flex-col overflow-hidden">
         <!-- 顶部导航栏 -->
         <header class="sticky top-0 z-50 backdrop-blur-md border-b border-border bg-background/80 transition-colors duration-300">
             <div class="mx-auto px-6 h-16 flex items-center justify-between">
@@ -69,16 +69,16 @@
         </header>
 
         <!-- 主要内容区域 -->
-        <div class="flex flex-1">
+        <div class="flex flex-1 min-h-0 overflow-hidden">
             <!-- 分类导航栏 -->
-            <aside class="md:w-64 bg-surface border-r border-border min-h-screen" style="width: 140px;">
+            <aside class="md:w-64 min-h-0 bg-surface border-r border-border h-full overflow-y-auto" style="width: 140px;">
                 <nav class="p-2" id="category-nav">
                     <!-- 分类导航项将通过JavaScript动态生成 -->
                 </nav>
             </aside>
 
             <!-- 页面主要内容 -->
-            <main class="flex-1 px-6 py-6">
+            <main class="flex-1 min-h-0 overflow-y-auto px-6 py-6">
                 <div class="mx-auto">
                     <div id="empty-state" class="hidden flex-col items-center justify-center py-24 text-center animate-fade-in">
                         <div class="bg-surface p-4 rounded-2xl border border-border mb-4 shadow-sm">
@@ -88,7 +88,7 @@
                         <p class="text-textMuted text-sm mb-6">开始收藏你常用的网站吧</p>
                     </div>
 
-                    <div id="link-grid" class="gap-4" style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+                    <div id="link-grid" class="space-y-8">
                         <!-- Links injected here -->
                     </div>
                 </div>
@@ -98,74 +98,114 @@
         <!-- Category Management Modal -->
         <div id="category-modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60] hidden opacity-0 transition-opacity duration-200">
             <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-                <div id="category-modal-content" class="relative bg-background rounded-xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:w-full sm:max-w-lg scale-95 opacity-0 duration-200">
+                <div id="category-modal-content" class="relative bg-background rounded-2xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:w-full sm:max-w-2xl scale-95 opacity-0 duration-200">
                     <div class="px-6 py-5 border-b border-border flex justify-between items-center">
-                        <h3 class="text-lg font-medium leading-6 text-textMain" id="category-modal-title">管理分类</h3>
+                        <div>
+                            <h3 class="text-lg font-medium leading-6 text-textMain" id="category-modal-title">管理分类</h3>
+                        </div>
                         <button id="category-modal-close" class="text-textMuted hover:text-textMain transition-colors">
                             <i data-lucide="x" class="w-5 h-5"></i>
                         </button>
                     </div>
-                    <div class="px-6 py-6">
-                        <div class="mb-6">
-                            <h4 class="font-medium text-textMain mb-3">添加新分类</h4>
-                            <form id="category-form" class="space-y-3">
-                                <div>
-                                    <label for="category-name" class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">分类名称</label>
-                                    <input type="text" id="category-name" placeholder="分类名称" class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
+                    <div class="max-h-[75vh] overflow-y-auto px-6 py-6">
+                        <div class="space-y-6">
+                            <section class="rounded-2xl border border-border bg-surface/60">
+                                <div class="border-b border-border px-5 py-4">
+                                    <h4 class="font-medium text-textMain">添加新分类</h4>
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">图标</label>
-                                    <div class="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-3 bg-surface rounded-xl border border-border">
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="folder">
+                                <form id="category-form" class="space-y-4 p-5">
+                                    <div class="flex items-end gap-3">
+                                        <div class="flex-1">
+                                            <input type="text" id="category-name" placeholder="分类名称" class="w-full bg-background border border-border rounded-xl px-4 py-3 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
+                                        </div>
+                                        <button type="submit" form="category-form" class="shrink-0 h-[50px] px-5 rounded-xl text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">添加分类</button>
+                                    </div>
+                                    <div>
+                                        <div class="grid grid-cols-6 gap-2 rounded-2xl border border-border bg-background p-3">
+                                            <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="folder">
                                             <i data-lucide="folder" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="briefcase">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="briefcase">
                                             <i data-lucide="briefcase" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="gamepad-2">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="gamepad-2">
                                             <i data-lucide="gamepad-2" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="users">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="users">
                                             <i data-lucide="users" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="book-open">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="book-open">
                                             <i data-lucide="book-open" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="heart">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="heart">
                                             <i data-lucide="heart" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="star">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="star">
                                             <i data-lucide="star" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="shopping-cart">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="shopping-cart">
                                             <i data-lucide="shopping-cart" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="music">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="music">
                                             <i data-lucide="music" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="camera">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="camera">
                                             <i data-lucide="camera" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="mail">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="code-2">
+                                            <i data-lucide="code-2" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="palette">
+                                            <i data-lucide="palette" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="film">
+                                            <i data-lucide="film" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="wallet">
+                                            <i data-lucide="wallet" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="plane">
+                                            <i data-lucide="plane" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="wrench">
+                                            <i data-lucide="wrench" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="mail">
                                             <i data-lucide="mail" class="w-5 h-5"></i>
                                         </button>
-                                        <button type="button" class="category-icon-option w-12 h-12 rounded-lg border border-border text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors flex items-center justify-center" data-icon="settings">
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="settings">
                                             <i data-lucide="settings" class="w-5 h-5"></i>
                                         </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="globe">
+                                            <i data-lucide="globe" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="newspaper">
+                                            <i data-lucide="newspaper" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="graduation-cap">
+                                            <i data-lucide="graduation-cap" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="monitor-play">
+                                            <i data-lucide="monitor-play" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="sparkles">
+                                            <i data-lucide="sparkles" class="w-5 h-5"></i>
+                                        </button>
+                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="cpu">
+                                            <i data-lucide="cpu" class="w-5 h-5"></i>
+                                        </button>
                                     </div>
-                                    <div class="mt-2 text-xs text-textMuted text-center">点击选择分类图标</div>
                                     <input type="hidden" id="category-icon" value="folder">
+                                </form>
+                            </section>
+                            <section class="rounded-2xl border border-border bg-background">
+                                <div class="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
+                                    <div class="font-medium text-textMain">现有分类</div>
                                 </div>
-                            </form>
-                        </div>
-                        <div>
-                            <h4 class="font-medium text-textMain mb-3">现有分类</h4>
-                            <div id="category-list" class="max-h-60 overflow-y-auto mb-6">
-                                <!-- Categories will be populated here -->
-                            </div>
-                            <div class="flex justify-end pt-4 border-t border-border">
-                                <button type="submit" form="category-form" class="px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">添加</button>
-                            </div>
+                                <div id="category-list" class="max-h-72 overflow-y-auto p-5">
+                                    <!-- Categories will be populated here -->
+                                </div>
+                            </section>
                         </div>
                     </div>
                 </div>

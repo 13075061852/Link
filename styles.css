@@ -18,9 +18,15 @@
     --accent-color: #60a5fa;
 }
 
+html,
+body {
+    height: 100%;
+}
+
 body {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
+    overflow: hidden;
 }
 
 /* Category Navigation Styles */
@@ -62,7 +68,9 @@ body {
 }
 
 .card-hover {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+        box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+        border-color 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .card-hover:hover {
@@ -119,5 +127,12 @@ body {
 .link-container {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, 250px);
+    justify-content: start;
+}
+
+@media (max-width: 639px) {
+    .link-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }

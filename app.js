@@ -376,7 +376,7 @@ function openCategoryModal(store) {
         categoryModalOverlay.classList.add('open');
         categoryModalContent.classList.add('open');
     });
-    
+
     renderCategoryList(store);
 }
 
@@ -400,29 +400,47 @@ function renderCategoryList(store) {
     
     // Clear the container
     categoryList.innerHTML = '';
-    
-    // Create a grid container for category items
-    const gridContainer = document.createElement('div');
-    gridContainer.className = 'grid grid-cols-3 gap-3';
-    
+
+    if (categories.length === 0) {
+        categoryList.innerHTML = `
+            <div class="rounded-2xl border border-dashed border-border bg-surface/60 px-4 py-8 text-center">
+                <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-background text-textMuted">
+                    <i data-lucide="folders" class="w-5 h-5"></i>
+                </div>
+                <div class="text-sm font-medium text-textMain">暂无分类</div>
+            </div>
+        `;
+        lucide.createIcons();
+        return;
+    }
+
+    const listContainer = document.createElement('div');
+    listContainer.className = 'grid grid-cols-1 gap-3 sm:grid-cols-2';
+
     categories.forEach(category => {
+        const count = store.getLinksByCategory(category.id).length;
         const categoryItem = document.createElement('div');
-        categoryItem.className = 'flex items-center justify-between p-3 bg-surface rounded-lg border border-border';
+        categoryItem.className = 'flex items-center justify-between gap-4 rounded-2xl border border-border bg-surface/70 px-4 py-3 transition-colors hover:bg-surface';
         
         categoryItem.innerHTML = `
-            <div class="flex items-center gap-2">
-                <i data-lucide="${category.icon}" class="w-4 h-4 text-textMuted"></i>
-                <span class="text-textMain">${category.name}</span>
+            <div class="flex min-w-0 items-center gap-3">
+                <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-background text-textMain">
+                    <i data-lucide="${category.icon}" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="truncate font-medium text-textMain">${category.name}</div>
+                    <div class="mt-1 text-sm text-textMuted">${count} 个链接</div>
+                </div>
             </div>
-            <button data-id="${category.id}" class="btn-delete-category p-1 text-textMuted hover:text-red-500 transition-colors" title="删除分类">
+            <button data-id="${category.id}" class="btn-delete-category flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-red-200 hover:bg-red-500/10 hover:text-red-500" title="删除分类">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
         `;
         
-        gridContainer.appendChild(categoryItem);
+        listContainer.appendChild(categoryItem);
     });
     
-    categoryList.appendChild(gridContainer);
+    categoryList.appendChild(listContainer);
     
     // Add event listeners to delete buttons
     document.querySelectorAll('.btn-delete-category').forEach(btn => {

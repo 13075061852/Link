@@ -1,4 +1,4 @@
-import { getFaviconUrl, getFaviconUrlAlt, isValidUrl } from './utils.js';
+import { getFaviconUrl, getFaviconUrlAlt } from './utils.js';
 
 export class UI {
     constructor(store) {
@@ -24,10 +24,12 @@ export class UI {
 
     createCardHTML(link) {
         const favicon = getFaviconUrl(link.url);
+        const faviconAlt = getFaviconUrlAlt(link.url);
         const hostname = new URL(link.url).hostname;
         const category = this.store.getCategoryById(link.categoryId);
-        // 使用链接的自定义图片，如果没有则使用默认图标
         const iconData = link.iconData;
+        const iconSrc = iconData || favicon;
+        const fallbackSrc = iconData ? favicon : faviconAlt;
 
         return `
             <div class="group relative bg-surface border border-border rounded-xl p-4 card-hover animate-fade-in select-none">
@@ -42,10 +44,14 @@ export class UI {
                 
                 <a href="${link.url}" target="_blank" class="flex items-start gap-4 block outline-none">
 <div class="w-16 h-16 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5">
-                        ${iconData ? 
-                            `<img src="${iconData}" alt="${link.title}" class="w-full h-full object-contain">` : 
-                            `<i data-lucide="link" class="w-8 h-8 text-textMuted"></i>`
-                        }
+                        <img
+                            src="${iconSrc}"
+                            alt="${link.title}"
+                            class="w-full h-full object-contain"
+                            data-fallback="${fallbackSrc}"
+                            onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback='';}else{this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');}"
+                        >
+                        <i data-lucide="link" class="hidden w-8 h-8 text-textMuted"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="font-medium text-textMain truncate pr-6">${link.title}</h3>
