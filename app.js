@@ -321,10 +321,10 @@ function renderCategoryNav(store) {
     
     // Add "全部" category
     let navHTML = `
-        <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 active" data-category="all">
+        <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 active" data-category="all" aria-label="全部" title="全部">
             <i data-lucide="layout-grid" class="w-5 h-5"></i>
-            <span>全部</span>
-            <span class="ml-auto text-xs text-textMuted">(${allLinks.length})</span>
+            <span class="category-nav-label">全部</span>
+            <span class="category-nav-count ml-auto text-xs text-textMuted">(${allLinks.length})</span>
         </a>
     `;
     
@@ -332,10 +332,10 @@ function renderCategoryNav(store) {
     categories.forEach(category => {
         const count = store.getLinksByCategory(category.id).length;
         navHTML += `
-            <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1" data-category="${category.id}">
+            <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1" data-category="${category.id}" aria-label="${category.name}" title="${category.name}">
                 <i data-lucide="${category.icon}" class="w-5 h-5"></i>
-                <span>${category.name}</span>
-                <span class="ml-auto text-xs text-textMuted">(${count})</span>
+                <span class="category-nav-label">${category.name}</span>
+                <span class="category-nav-count ml-auto text-xs text-textMuted">(${count})</span>
             </a>
         `;
     });

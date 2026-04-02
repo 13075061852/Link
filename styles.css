@@ -30,6 +30,10 @@ body {
 }
 
 /* Category Navigation Styles */
+.category-sidebar {
+    width: 4.5rem;
+}
+
 .category-nav-item {
     transition: all 0.2s ease;
 }
@@ -41,6 +45,30 @@ body {
 .category-nav-item.active {
     background-color: var(--surface-hover);
     color: var(--accent-color);
+}
+
+.category-nav-label,
+.category-nav-count {
+    display: none;
+}
+
+.category-nav-item {
+    justify-content: center;
+}
+
+@media (min-width: 768px) {
+    .category-sidebar {
+        width: 140px;
+    }
+
+    .category-nav-label,
+    .category-nav-count {
+        display: inline;
+    }
+
+    .category-nav-item {
+        justify-content: flex-start;
+    }
 }
 
 .category-icon-option {
