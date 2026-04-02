@@ -114,14 +114,14 @@
                                     <h4 class="font-medium text-textMain">添加新分类</h4>
                                 </div>
                                 <form id="category-form" class="space-y-4 p-5">
-                                    <div class="flex items-end gap-3">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                                         <div class="flex-1">
                                             <input type="text" id="category-name" placeholder="分类名称" class="w-full bg-background border border-border rounded-xl px-4 py-3 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
                                         </div>
-                                        <button type="submit" form="category-form" class="shrink-0 h-[50px] px-5 rounded-xl text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">添加分类</button>
+                                        <button type="submit" form="category-form" class="h-[50px] shrink-0 px-5 rounded-xl text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md sm:w-auto">添加分类</button>
                                     </div>
                                     <div>
-                                        <div class="grid grid-cols-6 gap-2 rounded-2xl border border-border bg-background p-3">
+                                        <div class="grid grid-cols-4 gap-2 rounded-2xl border border-border bg-background p-3 sm:grid-cols-6">
                                             <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="folder">
                                             <i data-lucide="folder" class="w-5 h-5"></i>
                                         </button>
