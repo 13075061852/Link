@@ -23,10 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const themeBtn = document.getElementById('theme-toggle');
-    themeBtn.addEventListener('click', () => {
-        themeManager.toggle();
-        // Re-render category nav to apply theme changes
-        setTimeout(() => renderCategoryNav(store), 100);
+    themeBtn.addEventListener('click', (event) => {
+        startThemeReveal({
+            themeManager,
+            store,
+            trigger: themeBtn,
+            x: event.clientX,
+            y: event.clientY,
+            onThemeChanged: () => renderCategoryNav(store)
+        });
     });
 
     const addBtn = document.getElementById('add-btn');
@@ -530,6 +535,56 @@ function closeDataModal(overlay, content) {
     setTimeout(() => {
         overlay.classList.add('hidden');
     }, 200);
+}
+
+function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
+        themeManager.toggle();
+        if (typeof onThemeChanged === 'function') {
+            onThemeChanged();
+        }
+        return;
+    }
+
+    const rect = trigger.getBoundingClientRect();
+    const centerX = Number.isFinite(x) && x > 0 ? x : rect.left + rect.width / 2;
+    const centerY = Number.isFinite(y) && y > 0 ? y : rect.top + rect.height / 2;
+    const radius = Math.hypot(
+        Math.max(centerX, window.innerWidth - centerX),
+        Math.max(centerY, window.innerHeight - centerY)
+    );
+
+    const root = document.documentElement;
+    root.style.setProperty('--theme-reveal-x', `${centerX}px`);
+    root.style.setProperty('--theme-reveal-y', `${centerY}px`);
+    root.style.setProperty('--theme-reveal-radius', `${radius}px`);
+
+    const startTransition = document.startViewTransition?.bind(document);
+    if (!startTransition) {
+        themeManager.toggle();
+        if (typeof onThemeChanged === 'function') {
+            onThemeChanged();
+        }
+        root.style.removeProperty('--theme-reveal-x');
+        root.style.removeProperty('--theme-reveal-y');
+        root.style.removeProperty('--theme-reveal-radius');
+        return;
+    }
+
+    const transition = startTransition(() => {
+        themeManager.toggle();
+        if (typeof onThemeChanged === 'function') {
+            onThemeChanged();
+        }
+    });
+
+    transition.finished.finally(() => {
+        root.style.removeProperty('--theme-reveal-x');
+        root.style.removeProperty('--theme-reveal-y');
+        root.style.removeProperty('--theme-reveal-radius');
+    });
 }
 
 function refreshView(store, ui) {
