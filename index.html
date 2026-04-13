@@ -60,10 +60,18 @@
                         <i data-lucide="folder-closed" class="w-5 h-5"></i>
                     </button>
 
+                    <button id="import-btn" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="导入数据" title="导入数据">
+                        <i data-lucide="upload" class="w-5 h-5"></i>
+                    </button>
+
+                    <button id="export-btn" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="导出数据" title="导出数据">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                    </button>
+
                     <button id="add-btn" class="flex items-center gap-2 bg-textMain text-background px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-textMain/10">
                         <i data-lucide="plus" class="w-4 h-4"></i>
                         <span>添加</span>
-                    </button
+                    </button>
                 </div>
             </div>
         </header>
@@ -275,6 +283,44 @@
 
         <!-- Toast Container -->
         <div id="toast-container" class="fixed bottom-6 right-6 z-[70] flex flex-col gap-2 pointer-events-none"></div>
+
+        <!-- Data Import/Export Modal -->
+        <div id="data-modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[70] hidden opacity-0 transition-opacity duration-200">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+                <div id="data-modal-content" class="relative bg-background rounded-2xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:w-full sm:max-w-2xl scale-95 opacity-0 duration-200">
+                    <div class="px-6 py-5 border-b border-border flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-medium leading-6 text-textMain" id="data-modal-title">数据导出</h3>
+                            <p class="mt-1 text-sm text-textMuted" id="data-modal-description">选择要导出的分类，默认全选。</p>
+                        </div>
+                        <button id="data-modal-close" class="text-textMuted hover:text-textMain transition-colors">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="px-6 py-6">
+                        <div id="data-modal-body" class="space-y-4"></div>
+                        <div class="mt-6 flex items-center justify-end gap-3">
+                            <button id="data-modal-secondary" type="button" class="px-4 py-2 rounded-lg text-sm font-medium text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors">取消</button>
+                            <button id="data-modal-primary" type="button" class="px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">确认</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="drop-overlay" class="fixed inset-0 z-[80] hidden opacity-0 pointer-events-none scale-95 transition-all duration-200">
+            <div class="flex h-full w-full items-center justify-center bg-background/70 backdrop-blur-sm">
+                <div class="rounded-3xl border-2 border-dashed border-accent bg-surface/90 px-8 py-10 text-center shadow-2xl">
+                    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                        <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                    </div>
+                    <div class="text-lg font-semibold text-textMain">Drop JSON file to import</div>
+                    <div class="mt-2 text-sm text-textMuted">You can choose replace or append after the file is loaded.</div>
+                </div>
+            </div>
+        </div>
+
+        <input type="file" id="import-file-input" accept="application/json,.json" class="hidden">
 
         <script type="module" src="app.js"></script>
     </div>

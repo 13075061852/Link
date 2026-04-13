@@ -3,6 +3,9 @@ import { ThemeManager } from './theme.js';
 import { UI } from './ui.js';
 import { isValidUrl, debounce } from './utils.js';
 
+let pendingImportPayload = null;
+let pendingImportFileName = '';
+
 document.addEventListener('DOMContentLoaded', () => {
     const store = new Store();
     const themeManager = new ThemeManager();
@@ -36,6 +39,98 @@ document.addEventListener('DOMContentLoaded', () => {
     const manageCategoriesBtn = document.getElementById('manage-categories-btn');
     manageCategoriesBtn.addEventListener('click', () => {
         openCategoryModal(store);
+    });
+
+    const importBtn = document.getElementById('import-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const importFileInput = document.getElementById('import-file-input');
+    const dataModalOverlay = document.getElementById('data-modal-overlay');
+    const dataModalContent = document.getElementById('data-modal-content');
+    const dataModalTitle = document.getElementById('data-modal-title');
+    const dataModalDescription = document.getElementById('data-modal-description');
+    const dataModalBody = document.getElementById('data-modal-body');
+    const dataModalClose = document.getElementById('data-modal-close');
+    const dataModalSecondary = document.getElementById('data-modal-secondary');
+    const dataModalPrimary = document.getElementById('data-modal-primary');
+    const dropOverlay = document.getElementById('drop-overlay');
+
+    importBtn.addEventListener('click', () => {
+        importFileInput.value = '';
+        importFileInput.click();
+    });
+
+    exportBtn.addEventListener('click', () => {
+        openExportModal(store, {
+            onExport: (categoryIds) => {
+                const backup = store.exportData({ categoryIds });
+                const filename = `link-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                downloadJson(backup, filename);
+                ui.showToast('已导出备份文件');
+            },
+            onClose: () => closeDataModal(dataModalOverlay, dataModalContent)
+        });
+    });
+
+    importFileInput.addEventListener('change', async () => {
+        const file = importFileInput.files?.[0];
+        if (!file) return;
+        await prepareImportFile(file, {
+            store,
+            ui,
+            importFileInput,
+            openModal: (config) => openDataModal(dataModalOverlay, dataModalContent, dataModalTitle, dataModalDescription, dataModalBody, dataModalSecondary, dataModalPrimary, config),
+            refresh: () => refreshView(store, ui)
+        });
+    });
+
+    let dragDepth = 0;
+    const isFileDrag = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+
+    document.addEventListener('dragenter', (event) => {
+        if (!isFileDrag(event)) return;
+        dragDepth += 1;
+        showDropOverlay(dropOverlay, true);
+    });
+
+    document.addEventListener('dragover', (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        showDropOverlay(dropOverlay, true);
+    });
+
+    document.addEventListener('dragleave', (event) => {
+        if (!isFileDrag(event)) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) {
+            showDropOverlay(dropOverlay, false);
+        }
+    });
+
+    document.addEventListener('drop', async (event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        dragDepth = 0;
+        showDropOverlay(dropOverlay, false);
+
+        const file = event.dataTransfer.files?.[0];
+        if (file) {
+            await prepareImportFile(file, {
+                store,
+                ui,
+                importFileInput,
+                openModal: (config) => openDataModal(dataModalOverlay, dataModalContent, dataModalTitle, dataModalDescription, dataModalBody, dataModalSecondary, dataModalPrimary, config),
+                refresh: () => refreshView(store, ui)
+            });
+        }
+    });
+
+    dataModalClose.addEventListener('click', () => closeDataModal(dataModalOverlay, dataModalContent));
+    dataModalSecondary.addEventListener('click', () => closeDataModal(dataModalOverlay, dataModalContent));
+
+    dataModalOverlay.addEventListener('click', (e) => {
+        if (e.target.id === 'data-modal-overlay') {
+            closeDataModal(dataModalOverlay, dataModalContent);
+        }
     });
 
     const categoryModalCloseBtn = document.getElementById('category-modal-close');
@@ -239,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') {
             ui.closeModal();
             closeCategoryModal();
+            closeDataModal(dataModalOverlay, dataModalContent);
             searchInput.blur();
         }
     });
@@ -391,6 +487,214 @@ function closeCategoryModal() {
     setTimeout(() => {
         categoryModalOverlay.classList.add('hidden');
     }, 200);
+}
+
+function openDataModal(overlay, content, titleEl, descriptionEl, bodyEl, secondaryBtn, primaryBtn, config) {
+    titleEl.textContent = config.title || '';
+    descriptionEl.textContent = config.description || '';
+    bodyEl.innerHTML = config.bodyHTML || '';
+
+    secondaryBtn.textContent = config.secondaryText || '取消';
+    primaryBtn.textContent = config.primaryText || '确认';
+    secondaryBtn.classList.toggle('hidden', config.secondaryHidden === true);
+    primaryBtn.className = config.primaryClassName || 'px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md';
+    secondaryBtn.className = config.secondaryClassName || 'px-4 py-2 rounded-lg text-sm font-medium text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors';
+
+    secondaryBtn.onclick = () => {
+        if (typeof config.onSecondary === 'function') {
+            config.onSecondary();
+            return;
+        }
+        closeDataModal(overlay, content);
+    };
+
+    primaryBtn.onclick = () => {
+        if (typeof config.onPrimary === 'function') {
+            config.onPrimary();
+        }
+    };
+
+    overlay.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        overlay.classList.add('open');
+        content.classList.add('open');
+    });
+
+    lucide.createIcons();
+}
+
+function closeDataModal(overlay, content) {
+    overlay.classList.remove('open');
+    content.classList.remove('open');
+
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, 200);
+}
+
+function refreshView(store, ui) {
+    const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
+    ui.render(store.search(document.getElementById('search-input').value), isGroupedByCategory);
+    renderCategoryNav(store);
+    populateCategorySelect(store);
+}
+
+function openExportModal(store, handlers) {
+    const categories = store.getCategories();
+    const categoryCards = [];
+
+    categoryCards.push(`
+        <label class="flex items-center gap-3 rounded-2xl border border-border bg-surface/60 px-4 py-3 hover:bg-surface transition-colors">
+            <input type="checkbox" value="uncategorized" class="h-4 w-4 accent-[var(--accent-color)]" checked>
+            <div class="min-w-0">
+                <div class="font-medium text-textMain">未分类</div>
+                <div class="text-sm text-textMuted">没有分类的链接</div>
+            </div>
+        </label>
+    `);
+
+    categories.forEach(category => {
+        const count = store.getLinksByCategory(category.id).length;
+        categoryCards.push(`
+            <label class="flex items-center gap-3 rounded-2xl border border-border bg-surface/60 px-4 py-3 hover:bg-surface transition-colors">
+                <input type="checkbox" value="${category.id}" class="h-4 w-4 accent-[var(--accent-color)]" checked>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-textMain">
+                    <i data-lucide="${category.icon}" class="w-4 h-4"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="truncate font-medium text-textMain">${category.name}</div>
+                    <div class="text-sm text-textMuted">${count} 条链接</div>
+                </div>
+            </label>
+        `);
+    });
+
+    openDataModal(
+        document.getElementById('data-modal-overlay'),
+        document.getElementById('data-modal-content'),
+        document.getElementById('data-modal-title'),
+        document.getElementById('data-modal-description'),
+        document.getElementById('data-modal-body'),
+        document.getElementById('data-modal-secondary'),
+        document.getElementById('data-modal-primary'),
+        {
+            title: '导出数据',
+            description: '默认已全选，你可以只导出某些分类的链接。',
+            bodyHTML: `
+                <div class="space-y-3">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        ${categoryCards.join('')}
+                    </div>
+                    <div class="text-sm text-textMuted">导出文件会包含所选链接和对应分类信息。</div>
+                </div>
+            `,
+            secondaryText: '取消',
+            primaryText: '导出所选',
+            onSecondary: () => closeDataModal(document.getElementById('data-modal-overlay'), document.getElementById('data-modal-content')),
+            onPrimary: () => {
+                const selectedCategoryIds = Array.from(document.querySelectorAll('#data-modal-body input[type="checkbox"]:checked'))
+                    .map(input => input.value);
+
+                if (selectedCategoryIds.length === 0) {
+                    const ui = new UI(store);
+                    ui.showToast('请至少选择一个分类');
+                    return;
+                }
+
+                handlers.onExport(selectedCategoryIds);
+                closeDataModal(document.getElementById('data-modal-overlay'), document.getElementById('data-modal-content'));
+            }
+        }
+    );
+}
+
+async function prepareImportFile(file, { store, ui, importFileInput, openModal, refresh }) {
+    pendingImportPayload = null;
+    pendingImportFileName = '';
+
+    try {
+        const text = await file.text();
+        pendingImportPayload = JSON.parse(text);
+        pendingImportFileName = file.name || 'import.json';
+
+        openModal({
+            title: '导入数据',
+            description: `已读取 ${pendingImportFileName}，请选择覆盖现有数据还是追加到现有数据。`,
+            bodyHTML: `
+                <div class="rounded-2xl border border-border bg-surface/60 px-4 py-4 text-sm text-textMuted">
+                    覆盖导入会替换当前全部链接和分类。
+                    追加导入会保留现有数据，并把文件中的内容合并进来。
+                </div>
+            `,
+            secondaryText: '覆盖导入',
+            primaryText: '追加导入',
+            primaryClassName: 'px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md',
+            secondaryClassName: 'px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-border text-textMain hover:bg-surfaceHover transition-colors',
+            onSecondary: () => performImport('replace', store, ui, refresh),
+            onPrimary: () => performImport('append', store, ui, refresh)
+        });
+    } catch (error) {
+        console.error(error);
+        pendingImportPayload = null;
+        pendingImportFileName = '';
+        ui.showToast(error instanceof SyntaxError ? 'JSON 文件格式不正确' : error.message || '导入失败');
+    } finally {
+        importFileInput.value = '';
+    }
+}
+
+function performImport(mode, store, ui, refresh) {
+    try {
+        if (!pendingImportPayload) {
+            ui.showToast('没有可导入的数据');
+            return;
+        }
+
+        const result = store.importData(pendingImportPayload, { mode });
+        pendingImportPayload = null;
+        pendingImportFileName = '';
+        refresh();
+        closeDataModal(document.getElementById('data-modal-overlay'), document.getElementById('data-modal-content'));
+        const skippedText = mode === 'append' && result.skippedLinksCount > 0
+            ? `，跳过 ${result.skippedLinksCount} 条重复链接`
+            : '';
+        ui.showToast(mode === 'append'
+            ? `已追加 ${result.linksCount} 条链接、${result.categoriesCount} 个分类${skippedText}`
+            : `已覆盖导入 ${result.linksCount} 条链接、${result.categoriesCount} 个分类`);
+    } catch (error) {
+        console.error(error);
+        pendingImportPayload = null;
+        pendingImportFileName = '';
+        closeDataModal(document.getElementById('data-modal-overlay'), document.getElementById('data-modal-content'));
+        ui.showToast(error.message || '导入失败');
+    }
+}
+
+function showDropOverlay(overlay, active) {
+    if (active) {
+        overlay.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            overlay.classList.add('active');
+        });
+        return;
+    }
+
+    overlay.classList.remove('active');
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, 200);
+}
+
+function downloadJson(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 // Render category list in management modal

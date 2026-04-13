@@ -141,6 +141,26 @@ body {
     transform: scale(100%);
 }
 
+#data-modal-overlay.open {
+    display: block;
+    opacity: 1;
+}
+
+#data-modal-content.open {
+    opacity: 1;
+    transform: scale(100%);
+}
+
+#drop-overlay {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#drop-overlay.active {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
 /* Toast Notification */
 .toast {
     background: var(--text-main);
