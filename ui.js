@@ -32,18 +32,18 @@ export class UI {
         const fallbackSrc = iconData ? favicon : faviconAlt;
 
         return `
-            <div class="group relative bg-surface border border-border rounded-xl p-4 card-hover animate-fade-in select-none">
-                <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <div class="group relative h-full bg-surface border border-border rounded-xl p-3 card-hover animate-fade-in select-none">
+                <div class="absolute top-2.5 right-2.5 flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                     <button data-id="${link.id}" class="btn-edit p-1.5 rounded-md text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="编辑">
-                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                     </button>
                     <button data-id="${link.id}" class="btn-delete p-1.5 rounded-md text-textMuted hover:bg-red-500/10 hover:text-red-500 transition-colors" title="删除">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>
                 </div>
                 
-                <a href="${link.url}" target="_blank" class="flex items-start gap-4 block outline-none">
-<div class="w-16 h-16 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5">
+                <a href="${link.url}" target="_blank" class="flex min-w-0 items-start gap-3 pr-12 outline-none">
+                    <div class="w-12 h-12 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5 sm:h-14 sm:w-14">
                         <img
                             src="${iconSrc}"
                             alt="${link.title}"
@@ -53,10 +53,10 @@ export class UI {
                         >
                         <i data-lucide="link" class="hidden w-8 h-8 text-textMuted"></i>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="font-medium text-textMain truncate pr-6">${link.title}</h3>
-                        <div class="flex items-center gap-1 mt-1">
-                            <i data-lucide="${category.icon}" class="w-3 h-3 text-textMuted"></i>
+                    <div class="flex-1 min-w-0 max-w-full">
+                        <h3 class="text-sm font-medium text-textMain truncate">${link.title}</h3>
+                        <div class="flex items-center gap-1 mt-0.5">
+                            <i data-lucide="${category.icon}" class="w-3 h-3 shrink-0 text-textMuted"></i>
                             <span class="text-xs text-textMuted truncate">${category.name}</span>
                         </div>
                         <p class="text-sm text-textMuted truncate mt-0.5 group-hover:text-accent transition-colors font-mono opacity-80 text-xs">${hostname}</p>
@@ -90,10 +90,10 @@ export class UI {
                         this.store.getCategoryById(categoryId);
                     
                     html += `
-                        <div class="mb-8">
-                            <h2 class="text-lg font-semibold text-textMain mb-4 flex items-center gap-2">
-                                <i data-lucide="${category.icon}" class="w-5 h-5"></i>
-                                <span>${category.name}</span>
+                        <div class="category-section mb-8">
+                            <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
+                                <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
+                                <span class="truncate">${category.name}</span>
                             </h2>
                             <div class="link-container">
                                 ${links.map(link => this.createCardHTML(link)).join('')}
@@ -106,10 +106,10 @@ export class UI {
                     const uncategorizedLinks = links.filter(link => link.categoryId === 'uncategorized' || !link.categoryId);
                     if (uncategorizedLinks.length > 0) {
                         html += `
-                            <div class="mb-8">
-                                <h2 class="text-lg font-semibold text-textMain mb-4 flex items-center gap-2">
-                                    <i data-lucide="folder" class="w-5 h-5"></i>
-                                    <span>未分类</span>
+                            <div class="category-section mb-8">
+                                <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
+                                    <i data-lucide="folder" class="w-5 h-5 shrink-0"></i>
+                                    <span class="truncate">未分类</span>
                                 </h2>
                                 <div class="link-container">
                                     ${uncategorizedLinks.map(link => this.createCardHTML(link)).join('')}
@@ -123,10 +123,10 @@ export class UI {
                         const categoryLinks = links.filter(link => link.categoryId === category.id);
                         if (categoryLinks.length > 0) {
                             html += `
-                                <div class="mb-8">
-                                    <h2 class="text-lg font-semibold text-textMain mb-4 flex items-center gap-2">
-                                        <i data-lucide="${category.icon}" class="w-5 h-5"></i>
-                                        <span>${category.name}</span>
+                                <div class="category-section mb-8">
+                                    <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
+                                        <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
+                                        <span class="truncate">${category.name}</span>
                                     </h2>
                                     <div class="link-container">
                                         ${categoryLinks.map(link => this.createCardHTML(link)).join('')}
@@ -140,7 +140,11 @@ export class UI {
                 this.grid.innerHTML = html;
             } else {
                 // 默认平铺显示
-                this.grid.innerHTML = links.map(link => this.createCardHTML(link)).join('');
+                this.grid.innerHTML = `
+                    <div class="link-container">
+                        ${links.map(link => this.createCardHTML(link)).join('')}
+                    </div>
+                `;
             }
         }
         lucide.createIcons();

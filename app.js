@@ -6,10 +6,28 @@ import { isValidUrl, debounce } from './utils.js';
 let pendingImportPayload = null;
 let pendingImportFileName = '';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const store = new Store();
     const themeManager = new ThemeManager();
     const ui = new UI(store);
+    store.onSaveError = () => ui.showToast('保存到 Cloudflare 失败');
+
+    try {
+        await store.init();
+    } catch (error) {
+        console.error(error);
+        document.getElementById('link-grid').innerHTML = `
+            <div class="rounded-2xl border border-border bg-surface/80 px-6 py-8 text-center">
+                <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-background text-textMuted">
+                    <i data-lucide="cloud-off" class="w-5 h-5"></i>
+                </div>
+                <div class="font-medium text-textMain">无法加载 Cloudflare 存储</div>
+                <div class="mt-2 text-sm text-textMuted">请确认 Worker 已部署，并且 KV 绑定可用。</div>
+            </div>
+        `;
+        lucide.createIcons();
+        return;
+    }
     
 
     ui.init();
@@ -43,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Category management
     const manageCategoriesBtn = document.getElementById('manage-categories-btn');
     manageCategoriesBtn.addEventListener('click', () => {
-        openCategoryModal(store);
+        openCategoryModal(store, ui);
     });
 
     const importBtn = document.getElementById('import-btn');
@@ -58,13 +76,84 @@ document.addEventListener('DOMContentLoaded', () => {
     const dataModalSecondary = document.getElementById('data-modal-secondary');
     const dataModalPrimary = document.getElementById('data-modal-primary');
     const dropOverlay = document.getElementById('drop-overlay');
+    const sidebar = document.querySelector('.category-sidebar');
+    const mobileSidebarToggle = document.getElementById('mobile-sidebar-toggle');
+    const mobileSidebarClose = document.getElementById('mobile-sidebar-close');
+    const mobileSidebarBackdrop = document.getElementById('mobile-sidebar-backdrop');
+    const mobileSearchInput = document.getElementById('mobile-search-input');
+    const mobileThemeBtn = document.getElementById('mobile-theme-toggle');
+    const mobileManageCategoriesBtn = document.getElementById('mobile-manage-categories-btn');
+    const mobileImportBtn = document.getElementById('mobile-import-btn');
+    const mobileExportBtn = document.getElementById('mobile-export-btn');
+    const mobileAddBtn = document.getElementById('mobile-add-btn');
+
+    const openMobileSidebar = () => {
+        sidebar.classList.add('mobile-open');
+        mobileSidebarBackdrop.classList.add('active');
+        mobileSidebarToggle.setAttribute('aria-expanded', 'true');
+    };
+
+    const closeMobileSidebar = () => {
+        sidebar.classList.remove('mobile-open');
+        mobileSidebarBackdrop.classList.remove('active');
+        mobileSidebarToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    mobileSidebarToggle.addEventListener('click', () => {
+        if (window.matchMedia('(min-width: 768px)').matches) return;
+        sidebar.classList.contains('mobile-open') ? closeMobileSidebar() : openMobileSidebar();
+    });
+
+    mobileSidebarClose.addEventListener('click', closeMobileSidebar);
+    mobileSidebarBackdrop.addEventListener('click', closeMobileSidebar);
+
+    mobileThemeBtn.addEventListener('click', (event) => {
+        startThemeReveal({
+            themeManager,
+            store,
+            trigger: mobileThemeBtn,
+            x: event.clientX,
+            y: event.clientY,
+            onThemeChanged: () => renderCategoryNav(store)
+        });
+    });
+
+    mobileAddBtn.addEventListener('click', () => {
+        closeMobileSidebar();
+        populateCategorySelect(store);
+        ui.openModal('add');
+    });
+
+    mobileManageCategoriesBtn.addEventListener('click', () => {
+        closeMobileSidebar();
+        openCategoryModal(store, ui);
+    });
 
     importBtn.addEventListener('click', () => {
         importFileInput.value = '';
         importFileInput.click();
     });
 
+    mobileImportBtn.addEventListener('click', () => {
+        closeMobileSidebar();
+        importFileInput.value = '';
+        importFileInput.click();
+    });
+
     exportBtn.addEventListener('click', () => {
+        openExportModal(store, {
+            onExport: (categoryIds) => {
+                const backup = store.exportData({ categoryIds });
+                const filename = `link-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                downloadJson(backup, filename);
+                ui.showToast('已导出备份文件');
+            },
+            onClose: () => closeDataModal(dataModalOverlay, dataModalContent)
+        });
+    });
+
+    mobileExportBtn.addEventListener('click', () => {
+        closeMobileSidebar();
         openExportModal(store, {
             onExport: (categoryIds) => {
                 const backup = store.exportData({ categoryIds });
@@ -254,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.classList.add('bg-accent', 'text-white', 'border-accent');
                 }
             });
-            renderCategoryList(store);
+            renderCategoryList(store, ui);
             renderCategoryNav(store);
             // Update category select in link form
             populateCategorySelect(store);
@@ -300,9 +389,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     const searchInput = document.getElementById('search-input');
-    searchInput.addEventListener('input', debounce((e) => {
-        ui.handleSearch(e);
-    }, 200));
+    const handleSearchInput = debounce((sourceInput, targetInput) => {
+        targetInput.value = sourceInput.value;
+        ui.handleSearch({ target: sourceInput });
+    }, 200);
+
+    searchInput.addEventListener('input', () => {
+        handleSearchInput(searchInput, mobileSearchInput);
+    });
+
+    mobileSearchInput.addEventListener('input', () => {
+        handleSearchInput(mobileSearchInput, searchInput);
+    });
 
 
     const grid = document.getElementById('link-grid');
@@ -319,14 +417,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (deleteBtn) {
             const id = deleteBtn.dataset.id;
-            if (confirm('确定要删除这个链接吗？')) {
-                store.remove(id);
-                // 保持当前的显示模式
-                const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
-                ui.render(store.search(searchInput.value), isGroupedByCategory);
-                renderCategoryNav(store);
-                ui.showToast('链接已删除');
-            }
+            const link = store.getAll().find(l => l.id === id);
+            if (!link) return;
+
+            openDeleteConfirmModal({
+                title: '删除链接',
+                description: '删除后无法恢复。',
+                bodyHTML: `
+                    <div class="rounded-2xl border border-red-200 bg-red-500/5 px-4 py-3">
+                        <div class="text-sm text-textMuted">即将删除</div>
+                        <div class="mt-1 truncate font-medium text-textMain">${escapeHTML(link.title)}</div>
+                        <div class="mt-1 truncate text-sm font-mono text-textMuted">${escapeHTML(link.url)}</div>
+                    </div>
+                `,
+                primaryText: '删除链接',
+                onConfirm: () => {
+                    store.remove(id);
+                    // 保持当前的显示模式
+                    const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
+                    ui.render(store.search(searchInput.value), isGroupedByCategory);
+                    renderCategoryNav(store);
+                    ui.showToast('链接已删除');
+                }
+            });
         }
     });
     
@@ -337,9 +450,22 @@ document.addEventListener('DOMContentLoaded', () => {
             searchInput.focus();
         }
         if (e.key === 'Escape') {
-            ui.closeModal();
-            closeCategoryModal();
-            closeDataModal(dataModalOverlay, dataModalContent);
+            if (dataModalOverlay.classList.contains('open')) {
+                closeDataModal(dataModalOverlay, dataModalContent);
+                return;
+            }
+            if (document.getElementById('modal-overlay').classList.contains('open')) {
+                ui.closeModal();
+                return;
+            }
+            if (document.getElementById('category-modal-overlay').classList.contains('open')) {
+                closeCategoryModal();
+                return;
+            }
+            if (sidebar.classList.contains('mobile-open')) {
+                closeMobileSidebar();
+                return;
+            }
             searchInput.blur();
         }
     });
@@ -356,7 +482,7 @@ function populateCategorySelect(store, selectedId = null) {
     // Add "未分类" option
     const uncategorizedBtn = document.createElement('button');
     uncategorizedBtn.type = 'button';
-    uncategorizedBtn.className = 'category-option px-3 py-2 rounded-lg border text-sm transition-all ' + 
+    uncategorizedBtn.className = 'category-option max-w-full px-3 py-2 rounded-lg border text-sm transition-all ' + 
         (selectedId === null || selectedId === 'uncategorized' ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
     uncategorizedBtn.textContent = '未分类';
     uncategorizedBtn.dataset.categoryId = 'uncategorized';
@@ -382,9 +508,9 @@ function populateCategorySelect(store, selectedId = null) {
     categories.forEach(category => {
         const categoryBtn = document.createElement('button');
         categoryBtn.type = 'button';
-        categoryBtn.className = 'category-option px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ' + 
+        categoryBtn.className = 'category-option flex max-w-full items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ' + 
             (selectedId && selectedId === category.id ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
-        categoryBtn.innerHTML = `<i data-lucide="${category.icon}" class="w-4 h-4"></i><span>${category.name}</span>`;
+        categoryBtn.innerHTML = `<i data-lucide="${category.icon}" class="w-4 h-4 shrink-0"></i><span class="min-w-0 truncate">${category.name}</span>`;
         categoryBtn.dataset.categoryId = category.id;
         
         categoryBtn.addEventListener('click', () => {
@@ -419,11 +545,12 @@ function renderCategoryNav(store) {
     const categoryNav = document.getElementById('category-nav');
     const categories = store.getCategories();
     const allLinks = store.getAll();
+    const activeCategory = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
     
     // Add "全部" category
     let navHTML = `
-        <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 active" data-category="all" aria-label="全部" title="全部">
-            <i data-lucide="layout-grid" class="w-5 h-5"></i>
+        <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === 'all' ? 'active' : ''}" data-category="all" aria-label="全部" title="全部">
+            <i data-lucide="layout-grid" class="w-5 h-5 shrink-0"></i>
             <span class="category-nav-label">全部</span>
             <span class="category-nav-count ml-auto text-xs text-textMuted">(${allLinks.length})</span>
         </a>
@@ -433,8 +560,8 @@ function renderCategoryNav(store) {
     categories.forEach(category => {
         const count = store.getLinksByCategory(category.id).length;
         navHTML += `
-            <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1" data-category="${category.id}" aria-label="${category.name}" title="${category.name}">
-                <i data-lucide="${category.icon}" class="w-5 h-5"></i>
+            <a href="#" class="category-nav-item category-nav-sortable flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === category.id ? 'active' : ''}" draggable="true" data-category="${category.id}" aria-label="${category.name}" title="${category.name}">
+                <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
                 <span class="category-nav-label">${category.name}</span>
                 <span class="category-nav-count ml-auto text-xs text-textMuted">(${count})</span>
             </a>
@@ -460,14 +587,67 @@ function renderCategoryNav(store) {
                 // 对于具体分类，也按分组结构渲染，但只显示当前分类
                 ui.render(store.getLinksByCategory(categoryId), true);
             }
+
+            document.querySelector('.category-sidebar')?.classList.remove('mobile-open');
+            document.getElementById('mobile-sidebar-backdrop')?.classList.remove('active');
+            document.getElementById('mobile-sidebar-toggle')?.setAttribute('aria-expanded', 'false');
         });
     });
+
+    setupCategoryDragSort(categoryNav, store);
     
     lucide.createIcons();
 }
 
+function setupCategoryDragSort(categoryNav, store) {
+    let draggedItem = null;
+
+    categoryNav.querySelectorAll('.category-nav-sortable').forEach(item => {
+        item.addEventListener('dragstart', (event) => {
+            draggedItem = item;
+            item.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', item.dataset.category);
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            categoryNav.querySelectorAll('.drag-over').forEach(navItem => navItem.classList.remove('drag-over'));
+            draggedItem = null;
+        });
+    });
+
+    categoryNav.ondragover = (event) => {
+        if (!draggedItem) return;
+        event.preventDefault();
+
+        const target = event.target.closest('.category-nav-sortable');
+        if (!target || target === draggedItem) return;
+
+        const targetRect = target.getBoundingClientRect();
+        const shouldInsertAfter = event.clientY > targetRect.top + targetRect.height / 2;
+        categoryNav.insertBefore(draggedItem, shouldInsertAfter ? target.nextSibling : target);
+    };
+
+    categoryNav.ondrop = (event) => {
+        if (!draggedItem) return;
+        event.preventDefault();
+
+        const orderedIds = Array.from(categoryNav.querySelectorAll('.category-nav-sortable'))
+            .map(item => item.dataset.category)
+            .filter(Boolean);
+        store.reorderCategories(orderedIds);
+
+        const categoryId = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
+        const ui = new UI(store);
+        ui.render(categoryId === 'all' ? store.getAll() : store.getLinksByCategory(categoryId), true);
+        populateCategorySelect(store);
+        renderCategoryNav(store);
+    };
+}
+
 // Open category management modal
-function openCategoryModal(store) {
+function openCategoryModal(store, ui) {
     const categoryModalOverlay = document.getElementById('category-modal-overlay');
     const categoryModalContent = document.getElementById('category-modal-content');
     
@@ -478,7 +658,7 @@ function openCategoryModal(store) {
         categoryModalContent.classList.add('open');
     });
 
-    renderCategoryList(store);
+    renderCategoryList(store, ui);
 }
 
 // Close category management modal
@@ -535,6 +715,34 @@ function closeDataModal(overlay, content) {
     setTimeout(() => {
         overlay.classList.add('hidden');
     }, 200);
+}
+
+function openDeleteConfirmModal({ title, description, bodyHTML, primaryText = '删除', onConfirm }) {
+    const overlay = document.getElementById('data-modal-overlay');
+    const content = document.getElementById('data-modal-content');
+
+    openDataModal(
+        overlay,
+        content,
+        document.getElementById('data-modal-title'),
+        document.getElementById('data-modal-description'),
+        document.getElementById('data-modal-body'),
+        document.getElementById('data-modal-secondary'),
+        document.getElementById('data-modal-primary'),
+        {
+            title,
+            description,
+            bodyHTML,
+            secondaryText: '取消',
+            primaryText,
+            primaryClassName: 'px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors shadow-md',
+            onPrimary: () => {
+                onConfirm();
+                closeDataModal(overlay, content);
+            },
+            onSecondary: () => closeDataModal(overlay, content)
+        }
+    );
 }
 
 function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
@@ -752,8 +960,17 @@ function downloadJson(data, filename) {
     URL.revokeObjectURL(url);
 }
 
+function escapeHTML(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
 // Render category list in management modal
-function renderCategoryList(store) {
+function renderCategoryList(store, ui, editingCategoryId = null) {
     const categoryList = document.getElementById('category-list');
     const categories = store.getCategories();
     
@@ -778,39 +995,135 @@ function renderCategoryList(store) {
 
     categories.forEach(category => {
         const count = store.getLinksByCategory(category.id).length;
+        const isEditing = category.id === editingCategoryId;
         const categoryItem = document.createElement('div');
         categoryItem.className = 'flex items-center justify-between gap-4 rounded-2xl border border-border bg-surface/70 px-4 py-3 transition-colors hover:bg-surface';
         
         categoryItem.innerHTML = `
-            <div class="flex min-w-0 items-center gap-3">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
                 <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-background text-textMain">
                     <i data-lucide="${category.icon}" class="w-5 h-5"></i>
                 </div>
-                <div class="min-w-0">
-                    <div class="truncate font-medium text-textMain">${category.name}</div>
-                    <div class="mt-1 text-sm text-textMuted">${count} 个链接</div>
-                </div>
+                ${isEditing ? `
+                    <form class="category-rename-form min-w-0 flex-1" data-id="${category.id}">
+                        <input
+                            type="text"
+                            class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-textMain outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/20"
+                            value="${escapeHTML(category.name)}"
+                            aria-label="分类名称"
+                        >
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <button type="submit" class="rounded-lg bg-textMain px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90">保存</button>
+                            <button type="button" class="btn-cancel-rename rounded-lg px-3 py-1.5 text-xs font-medium text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain">取消</button>
+                        </div>
+                    </form>
+                ` : `
+                    <div class="min-w-0">
+                        <div class="truncate font-medium text-textMain">${escapeHTML(category.name)}</div>
+                        <div class="mt-1 text-sm text-textMuted">${count} 个链接</div>
+                    </div>
+                `}
             </div>
-            <button data-id="${category.id}" class="btn-delete-category flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-red-200 hover:bg-red-500/10 hover:text-red-500" title="删除分类">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
+            <div class="flex flex-shrink-0 items-center gap-1">
+                ${isEditing ? '' : `
+                    <button data-id="${category.id}" class="btn-edit-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-border hover:bg-surfaceHover hover:text-textMain" title="重命名分类" aria-label="重命名分类">
+                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                    </button>
+                `}
+                <button data-id="${category.id}" class="btn-delete-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-red-200 hover:bg-red-500/10 hover:text-red-500" title="删除分类" aria-label="删除分类">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
         `;
         
         listContainer.appendChild(categoryItem);
     });
     
     categoryList.appendChild(listContainer);
+
+    const editingInput = categoryList.querySelector('.category-rename-form input');
+    if (editingInput) {
+        editingInput.focus();
+        editingInput.select();
+    }
+
+    categoryList.querySelectorAll('.btn-edit-category').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const categoryId = e.target.closest('.btn-edit-category').dataset.id;
+            renderCategoryList(store, ui, categoryId);
+        });
+    });
+
+    categoryList.querySelectorAll('.btn-cancel-rename').forEach(btn => {
+        btn.addEventListener('click', () => {
+            renderCategoryList(store, ui);
+        });
+    });
+
+    categoryList.querySelectorAll('.category-rename-form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const categoryId = e.target.dataset.id;
+            const categoryName = e.target.querySelector('input').value.trim();
+            if (!categoryName) {
+                ui?.showToast('分类名称不能为空');
+                return;
+            }
+
+            store.updateCategory(categoryId, { name: categoryName });
+            renderCategoryList(store, ui);
+            if (ui) {
+                refreshView(store, ui);
+                ui.showToast('分类已重命名');
+            } else {
+                renderCategoryNav(store);
+                populateCategorySelect(store);
+            }
+        });
+
+        form.querySelector('input').addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                renderCategoryList(store, ui);
+            }
+        });
+    });
     
     // Add event listeners to delete buttons
-    document.querySelectorAll('.btn-delete-category').forEach(btn => {
+    categoryList.querySelectorAll('.btn-delete-category').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const categoryId = e.target.closest('.btn-delete-category').dataset.id;
-            if (confirm('确定要删除这个分类吗？属于该分类的链接将被标记为未分类。')) {
-                store.removeCategory(categoryId);
-                renderCategoryList(store);
-                renderCategoryNav(store);
-                populateCategorySelect(store); // Update category select in link form
-            }
+            const category = store.getCategoryById(categoryId);
+            const count = store.getLinksByCategory(categoryId).length;
+
+            openDeleteConfirmModal({
+                title: '删除分类',
+                description: '删除分类后，该分类下的链接会移到未分类。',
+                bodyHTML: `
+                    <div class="rounded-2xl border border-red-200 bg-red-500/5 px-4 py-3">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-textMain">
+                                <i data-lucide="${category.icon}" class="w-5 h-5"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="truncate font-medium text-textMain">${escapeHTML(category.name)}</div>
+                                <div class="mt-1 text-sm text-textMuted">${count} 个链接将移到未分类</div>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                primaryText: '删除分类',
+                onConfirm: () => {
+                    store.removeCategory(categoryId);
+                    renderCategoryList(store, ui);
+                    if (ui) {
+                        refreshView(store, ui);
+                        ui.showToast('分类已删除');
+                    } else {
+                        renderCategoryNav(store);
+                        populateCategorySelect(store);
+                    }
+                }
+            });
         });
     });
     

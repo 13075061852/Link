@@ -1,6 +1,7 @@
 import { generateId } from './utils.js';
 
-const STORAGE_KEY = 'nexus_links_v1';
+const API_DATA_URL = window.LINK_API_URL || 'https://link-cloudflare-api.1308715689.workers.dev/api/data';
+const REMOTE_DATA_VERSION = 1;
 
 const defaultCategories = [
     { id: 'work', name: '工作', icon: 'briefcase' },
@@ -65,36 +66,77 @@ function normalizeUrlForComparison(url) {
 
 export class Store {
     constructor() {
-        this.links = this._loadLinks();
-        this.categories = this._loadCategories();
-        
+        this.links = [];
+        this.categories = [];
+        this._saveQueue = Promise.resolve();
+        this.onSaveError = null;
+    }
+
+    async init() {
+        const response = await fetch(API_DATA_URL, {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            throw new Error('无法连接 Cloudflare 存储 API');
+        }
+
+        const data = await response.json();
+        this.links = this._normalizeLinks(data.links, { allowEmpty: true });
+        this.categories = this._normalizeCategories(data.categories, { allowEmpty: true });
+
         if (this.links.length === 0) {
-            this.links = defaultLinks;
-            this._saveLinks();
+            this.links = [...defaultLinks];
         }
-        
+
         if (this.categories.length === 0) {
-            this.categories = defaultCategories;
-            this._saveCategories();
+            this.categories = [...defaultCategories];
+        }
+
+        if (!Array.isArray(data.links) || !Array.isArray(data.categories)) {
+            await this._saveRemote();
         }
     }
 
-    _loadLinks() {
-        const data = localStorage.getItem(STORAGE_KEY);
-        return data ? JSON.parse(data) : [];
-    }
-    
-    _loadCategories() {
-        const data = localStorage.getItem(STORAGE_KEY + '_categories');
-        return data ? JSON.parse(data) : [];
+    _serialize() {
+        return {
+            version: REMOTE_DATA_VERSION,
+            links: this.links,
+            categories: this.categories,
+            updatedAt: new Date().toISOString()
+        };
     }
 
-    _saveLinks() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.links));
+    async _saveRemote() {
+        const response = await fetch(API_DATA_URL, {
+            method: 'PUT',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(this._serialize())
+        });
+
+        if (!response.ok) {
+            throw new Error('保存到 Cloudflare 失败');
+        }
+
+        return response.json();
     }
-    
-    _saveCategories() {
-        localStorage.setItem(STORAGE_KEY + '_categories', JSON.stringify(this.categories));
+
+    _queueSave() {
+        this._saveQueue = this._saveQueue
+            .catch(() => {})
+            .then(() => this._saveRemote())
+            .catch(error => {
+                console.error(error);
+                if (typeof this.onSaveError === 'function') {
+                    this.onSaveError(error);
+                }
+            });
+
+        return this._saveQueue;
     }
 
     _normalizeCategories(categories, { allowEmpty = false } = {}) {
@@ -158,7 +200,7 @@ export class Store {
             createdAt: Date.now()
         };
         this.links.push(newLink);
-        this._saveLinks();
+        this._queueSave();
         return newLink;
     }
 
@@ -166,7 +208,7 @@ export class Store {
         const index = this.links.findIndex(l => l.id === id);
         if (index !== -1) {
             this.links[index] = { ...this.links[index], ...linkData };
-            this._saveLinks();
+            this._queueSave();
             return this.links[index];
         }
         return null;
@@ -174,7 +216,7 @@ export class Store {
 
     remove(id) {
         this.links = this.links.filter(l => l.id !== id);
-        this._saveLinks();
+        this._queueSave();
     }
     
     // Category methods
@@ -193,7 +235,7 @@ export class Store {
             icon: categoryData.icon || 'folder'
         };
         this.categories.push(newCategory);
-        this._saveCategories();
+        this._queueSave();
         return newCategory;
     }
     
@@ -201,10 +243,23 @@ export class Store {
         const index = this.categories.findIndex(c => c.id === id);
         if (index !== -1) {
             this.categories[index] = { ...this.categories[index], ...categoryData };
-            this._saveCategories();
+            this._queueSave();
             return this.categories[index];
         }
         return null;
+    }
+
+    reorderCategories(categoryIds) {
+        const nextOrder = Array.isArray(categoryIds) ? categoryIds : [];
+        const categoryById = new Map(this.categories.map(category => [category.id, category]));
+        const reordered = nextOrder
+            .map(id => categoryById.get(id))
+            .filter(Boolean);
+        const remaining = this.categories.filter(category => !nextOrder.includes(category.id));
+
+        this.categories = [...reordered, ...remaining];
+        this._queueSave();
+        return this.categories;
     }
     
     removeCategory(id) {
@@ -213,8 +268,7 @@ export class Store {
         this.links = this.links.map(link => 
             link.categoryId === id ? { ...link, categoryId: 'uncategorized' } : link
         );
-        this._saveCategories();
-        this._saveLinks();
+        this._queueSave();
     }
     
     getLinksByCategory(categoryId) {
@@ -270,8 +324,7 @@ export class Store {
 
         this.links = this._normalizeLinks(payload.links, { allowEmpty: true });
         this.categories = this._normalizeCategories(payload.categories, { allowEmpty: true });
-        this._saveLinks();
-        this._saveCategories();
+        this._queueSave();
 
         return {
             linksCount: this.links.length,
@@ -340,8 +393,7 @@ export class Store {
 
         this.categories = [...this.categories, ...newCategories];
         this.links = [...this.links, ...newLinks];
-        this._saveCategories();
-        this._saveLinks();
+        this._queueSave();
 
         return {
             linksCount: newLinks.length,
