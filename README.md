@@ -12,7 +12,7 @@ npm run dev
 链接数据默认连接到已部署的 Cloudflare 后端：
 
 ```text
-https://link-cloudflare-api.1308715689.workers.dev/api/data
+https://link-api.1308715689.workers.dev/api/data
 ```
 
 如需切换后端地址，可在页面加载前设置 `window.LINK_API_URL`。
@@ -32,5 +32,5 @@ npm run deploy
 
 当前已部署后端 Worker:
 
-- name: `link-cloudflare-api`
-- URL: `https://link-cloudflare-api.1308715689.workers.dev/api/data`
+- name: `link-api`
+- URL: `https://link-api.1308715689.workers.dev/api/data`

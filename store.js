@@ -1,6 +1,6 @@
 import { generateId } from './utils.js';
 
-const API_DATA_URL = window.LINK_API_URL || 'https://link-cloudflare-api.1308715689.workers.dev/api/data';
+const API_DATA_URL = window.LINK_API_URL || 'https://link-api.1308715689.workers.dev/api/data';
 const REMOTE_DATA_VERSION = 1;
 
 const defaultCategories = [
