@@ -1,4 +1,4 @@
-import { getFaviconUrl, getFaviconUrlAlt } from './utils.js';
+import { escapeHTML, getFaviconUrl, getFaviconUrlAlt, sanitizeIconName } from './utils.js';
 
 export class UI {
     constructor(store) {
@@ -17,7 +17,7 @@ export class UI {
     }
 
     init() {
-        // 默认按分类分组显示，因为"全部"分类默认是激活的
+        // 默认按分类分组显示
         this.render(this.store.getAll(), true);
         lucide.createIcons();
     }
@@ -30,6 +30,13 @@ export class UI {
         const iconData = link.iconData;
         const iconSrc = iconData || favicon;
         const fallbackSrc = iconData ? favicon : faviconAlt;
+        const categoryIcon = sanitizeIconName(category.icon);
+        const safeTitle = escapeHTML(link.title);
+        const safeUrl = escapeHTML(link.url);
+        const safeCategoryName = escapeHTML(category.name);
+        const safeIconSrc = escapeHTML(iconSrc);
+        const safeFallbackSrc = escapeHTML(fallbackSrc);
+        const safeHostname = escapeHTML(hostname);
 
         return `
             <div class="group relative h-full bg-surface border border-border rounded-xl p-3 card-hover animate-fade-in select-none">
@@ -42,24 +49,24 @@ export class UI {
                     </button>
                 </div>
                 
-                <a href="${link.url}" target="_blank" class="flex min-w-0 items-start gap-3 pr-12 outline-none">
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex min-w-0 items-start gap-3 pr-12 outline-none">
                     <div class="w-12 h-12 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5 sm:h-14 sm:w-14">
                         <img
-                            src="${iconSrc}"
-                            alt="${link.title}"
+                            src="${safeIconSrc}"
+                            alt="${safeTitle}"
                             class="w-full h-full object-contain"
-                            data-fallback="${fallbackSrc}"
+                            data-fallback="${safeFallbackSrc}"
                             onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback='';}else{this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');}"
                         >
                         <i data-lucide="link" class="hidden w-8 h-8 text-textMuted"></i>
                     </div>
                     <div class="flex-1 min-w-0 max-w-full">
-                        <h3 class="text-sm font-medium text-textMain truncate">${link.title}</h3>
+                        <h3 class="text-sm font-medium text-textMain truncate">${safeTitle}</h3>
                         <div class="flex items-center gap-1 mt-0.5">
-                            <i data-lucide="${category.icon}" class="w-3 h-3 shrink-0 text-textMuted"></i>
-                            <span class="text-xs text-textMuted truncate">${category.name}</span>
+                            <i data-lucide="${categoryIcon}" class="w-3 h-3 shrink-0 text-textMuted"></i>
+                            <span class="text-xs text-textMuted truncate">${safeCategoryName}</span>
                         </div>
-                        <p class="text-sm text-textMuted truncate mt-0.5 group-hover:text-accent transition-colors font-mono opacity-80 text-xs">${hostname}</p>
+                        <p class="text-sm text-textMuted truncate mt-0.5 group-hover:text-accent transition-colors font-mono opacity-80 text-xs">${safeHostname}</p>
                     </div>
                 </a>
             </div>
@@ -92,8 +99,8 @@ export class UI {
                     html += `
                         <div class="category-section mb-8">
                             <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
-                                <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
-                                <span class="truncate">${category.name}</span>
+                                <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
+                                <span class="truncate">${escapeHTML(category.name)}</span>
                             </h2>
                             <div class="link-container">
                                 ${links.map(link => this.createCardHTML(link)).join('')}
@@ -125,8 +132,8 @@ export class UI {
                             html += `
                                 <div class="category-section mb-8">
                                     <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
-                                        <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
-                                        <span class="truncate">${category.name}</span>
+                                        <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
+                                        <span class="truncate">${escapeHTML(category.name)}</span>
                                     </h2>
                                     <div class="link-container">
                                         ${categoryLinks.map(link => this.createCardHTML(link)).join('')}
@@ -150,11 +157,10 @@ export class UI {
         lucide.createIcons();
     }
 
-    handleSearch(e) {
+    handleSearch(e, categoryId = 'all') {
         const query = e.target.value.trim();
-        const results = this.store.search(query);
-        // 保持当前的显示模式
-        const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
+        const results = this.store.search(query, categoryId);
+        const isGroupedByCategory = categoryId === 'all';
         this.render(results, isGroupedByCategory);
     }
 

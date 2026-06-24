@@ -195,11 +195,7 @@ body {
     -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
 }
 
-.glass-card {
-    background: rgba(var(--surface-color), 0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
+/* Unused — kept for reference */
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }

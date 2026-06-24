@@ -1,6 +1,11 @@
 {
+  "name": "link",
+  "version": "1.0.0",
+  "private": true,
   "scripts": {
     "dev": "wrangler dev",
+    "check": "node --check worker.js && node --check public/app.js && node --check public/store.js && node --check public/ui.js && node --check public/utils.js && node --check public/theme.js && wrangler deploy --dry-run",
+    "db:migrate": "wrangler d1 migrations apply link_store --remote",
     "deploy": "wrangler deploy",
     "deploy:api": "wrangler deploy",
     "deploy:web": "powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1"

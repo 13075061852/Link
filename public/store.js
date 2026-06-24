@@ -1,4 +1,4 @@
-import { generateId } from './utils.js';
+import { generateId, isValidUrl, sanitizeIconName } from './utils.js';
 
 const API_DATA_URL = window.LINK_API_URL || 'https://link-api.1308715689.workers.dev/api/data';
 const REMOTE_DATA_VERSION = 1;
@@ -64,6 +64,11 @@ function normalizeUrlForComparison(url) {
     }
 }
 
+function normalizeUrl(value) {
+    const url = normalizeString(value);
+    return isValidUrl(url) ? new URL(url).href : '';
+}
+
 export class Store {
     constructor() {
         this.links = [];
@@ -86,15 +91,19 @@ export class Store {
         this.links = this._normalizeLinks(data.links, { allowEmpty: true });
         this.categories = this._normalizeCategories(data.categories, { allowEmpty: true });
 
+        let needsSave = false;
+
         if (this.links.length === 0) {
             this.links = [...defaultLinks];
+            needsSave = true;
         }
 
         if (this.categories.length === 0) {
             this.categories = [...defaultCategories];
+            needsSave = true;
         }
 
-        if (!Array.isArray(data.links) || !Array.isArray(data.categories)) {
+        if (!Array.isArray(data.links) || !Array.isArray(data.categories) || needsSave) {
             await this._saveRemote();
         }
     }
@@ -150,7 +159,7 @@ export class Store {
             .map(category => ({
                 id: normalizeString(category.id),
                 name: normalizeString(category.name),
-                icon: normalizeString(category.icon, 'folder')
+                icon: sanitizeIconName(category.icon)
             }))
             .filter(category => category.id && category.name && !seen.has(category.id) && seen.add(category.id));
 
@@ -172,7 +181,7 @@ export class Store {
             .map(link => ({
                 id: normalizeString(link.id),
                 title: normalizeString(link.title),
-                url: normalizeString(link.url),
+                url: normalizeUrl(link.url),
                 categoryId: normalizeString(link.categoryId, 'uncategorized'),
                 iconData: typeof link.iconData === 'string' ? link.iconData : '',
                 createdAt: normalizeTimestamp(link.createdAt)
@@ -232,7 +241,7 @@ export class Store {
         const newCategory = {
             id: generateId(),
             name: categoryData.name,
-            icon: categoryData.icon || 'folder'
+            icon: sanitizeIconName(categoryData.icon)
         };
         this.categories.push(newCategory);
         this._queueSave();
@@ -242,7 +251,11 @@ export class Store {
     updateCategory(id, categoryData) {
         const index = this.categories.findIndex(c => c.id === id);
         if (index !== -1) {
-            this.categories[index] = { ...this.categories[index], ...categoryData };
+            this.categories[index] = {
+                ...this.categories[index],
+                ...categoryData,
+                icon: sanitizeIconName(categoryData.icon || this.categories[index].icon)
+            };
             this._queueSave();
             return this.categories[index];
         }
@@ -275,12 +288,16 @@ export class Store {
         return this.links.filter(link => link.categoryId === categoryId);
     }
 
-    search(query) {
+    search(query, categoryId = null) {
         const lowerQuery = query.toLowerCase();
-        return this.links.filter(link => 
+        const results = this.links.filter(link => 
             link.title.toLowerCase().includes(lowerQuery) || 
             link.url.toLowerCase().includes(lowerQuery)
-        ).sort((a, b) => b.createdAt - a.createdAt);
+        );
+        if (categoryId && categoryId !== 'all') {
+            return results.filter(link => link.categoryId === categoryId).sort((a, b) => b.createdAt - a.createdAt);
+        }
+        return results.sort((a, b) => b.createdAt - a.createdAt);
     }
 
     exportData(options = {}) {

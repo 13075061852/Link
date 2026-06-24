@@ -9,13 +9,29 @@ npm install
 npm run dev
 ```
 
-链接数据默认连接到已部署的 Cloudflare 后端：
+本地预览和正式上线都访问同一份 Cloudflare 云端 D1 数据。前端默认连接到已部署的 Cloudflare 后端：
 
 ```text
 https://link-api.1308715689.workers.dev/api/data
 ```
 
-如需切换后端地址，可在页面加载前设置 `window.LINK_API_URL`。
+如需临时切换后端地址，可在页面加载前设置 `window.LINK_API_URL`。
+
+本地 Worker 的 D1 绑定也配置为远端模式，因此需要已登录 Cloudflare：
+
+```bash
+npx wrangler login
+```
+
+## 数据库初始化
+
+首次部署或新建 D1 数据库后执行：
+
+```bash
+npm run db:migrate
+```
+
+Worker 也会在请求进入时兜底创建缺失的表，避免空库直接返回 500。
 
 ## 部署
 

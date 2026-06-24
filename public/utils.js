@@ -11,6 +11,21 @@ export function isValidUrl(string) {
     }
 }
 
+export function escapeHTML(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+export function sanitizeIconName(icon, fallback = 'folder') {
+    return typeof icon === 'string' && /^[a-z0-9-]{1,48}$/.test(icon)
+        ? icon
+        : fallback;
+}
+
 export function getFaviconUrl(url) {
     try {
         const urlObj = new URL(url);

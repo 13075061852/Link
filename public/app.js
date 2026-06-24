@@ -1,10 +1,20 @@
 import { Store } from './store.js';
 import { ThemeManager } from './theme.js';
 import { UI } from './ui.js';
-import { isValidUrl, debounce } from './utils.js';
+import { isValidUrl, debounce, sanitizeIconName } from './utils.js';
 
 let pendingImportPayload = null;
 let pendingImportFileName = '';
+
+function getActiveCategoryId() {
+    const activeItem = document.querySelector('.category-nav-item.active');
+    return activeItem?.dataset.category || 'all';
+}
+
+function getDefaultLinkCategoryId() {
+    const activeCategoryId = getActiveCategoryId();
+    return activeCategoryId === 'all' ? 'uncategorized' : activeCategoryId;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     const store = new Store();
@@ -22,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <i data-lucide="cloud-off" class="w-5 h-5"></i>
                 </div>
                 <div class="font-medium text-textMain">无法加载 Cloudflare 存储</div>
-                <div class="mt-2 text-sm text-textMuted">请确认 Worker 已部署，并且 KV 绑定可用。</div>
+                <div class="mt-2 text-sm text-textMuted">请确认 Worker 已部署，并且 D1 数据库可用。</div>
             </div>
         `;
         lucide.createIcons();
@@ -32,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     ui.init();
     populateCategorySelect(store);
-    renderCategoryNav(store);
+    renderCategoryNav(store, ui);
 
     // Initialize icon selection
     const firstIconBtn = document.querySelector('.category-icon-option');
@@ -48,13 +58,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             trigger: themeBtn,
             x: event.clientX,
             y: event.clientY,
-            onThemeChanged: () => renderCategoryNav(store)
+            onThemeChanged: () => renderCategoryNav(store, ui)
         });
     });
 
     const addBtn = document.getElementById('add-btn');
     addBtn.addEventListener('click', () => {
-        populateCategorySelect(store);
+        populateCategorySelect(store, getDefaultLinkCategoryId());
         ui.openModal('add');
     });
 
@@ -114,13 +124,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             trigger: mobileThemeBtn,
             x: event.clientX,
             y: event.clientY,
-            onThemeChanged: () => renderCategoryNav(store)
+            onThemeChanged: () => renderCategoryNav(store, ui)
         });
     });
 
     mobileAddBtn.addEventListener('click', () => {
         closeMobileSidebar();
-        populateCategorySelect(store);
+        populateCategorySelect(store, getDefaultLinkCategoryId());
         ui.openModal('add');
     });
 
@@ -141,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     exportBtn.addEventListener('click', () => {
-        openExportModal(store, {
+        openExportModal(store, ui, {
             onExport: (categoryIds) => {
                 const backup = store.exportData({ categoryIds });
                 const filename = `link-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -154,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     mobileExportBtn.addEventListener('click', () => {
         closeMobileSidebar();
-        openExportModal(store, {
+        openExportModal(store, ui, {
             onExport: (categoryIds) => {
                 const backup = store.exportData({ categoryIds });
                 const filename = `link-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -317,9 +327,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 保持当前的显示模式
-        const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
-        ui.render(store.search(document.getElementById('search-input').value), isGroupedByCategory);
-        renderCategoryNav(store);
+        const activeCategoryId = getActiveCategoryId();
+        ui.render(store.search(document.getElementById('search-input').value, activeCategoryId), true);
+        renderCategoryNav(store, ui);
         ui.closeModal();
     });
 
@@ -344,7 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
             renderCategoryList(store, ui);
-            renderCategoryNav(store);
+            renderCategoryNav(store, ui);
             // Update category select in link form
             populateCategorySelect(store);
             ui.showToast('分类已添加');
@@ -375,7 +385,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const icon = selectedBtn.dataset.icon;
             
             // Update hidden input
-            document.getElementById('link-icon').value = icon;
+            const linkIconInput = document.getElementById('link-icon');
+            if (linkIconInput) {
+                linkIconInput.value = icon;
+            }
             
             // Update UI
             document.querySelectorAll('.link-icon-option').forEach(btn => {
@@ -389,9 +402,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     const searchInput = document.getElementById('search-input');
+
     const handleSearchInput = debounce((sourceInput, targetInput) => {
         targetInput.value = sourceInput.value;
-        ui.handleSearch({ target: sourceInput });
+        ui.handleSearch({ target: sourceInput }, getActiveCategoryId());
     }, 200);
 
     searchInput.addEventListener('input', () => {
@@ -434,9 +448,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 onConfirm: () => {
                     store.remove(id);
                     // 保持当前的显示模式
-                    const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
-                    ui.render(store.search(searchInput.value), isGroupedByCategory);
-                    renderCategoryNav(store);
+                    const activeCategoryId = getActiveCategoryId();
+                    ui.render(store.search(searchInput.value, activeCategoryId), true);
+                    renderCategoryNav(store, ui);
                     ui.showToast('链接已删除');
                 }
             });
@@ -447,7 +461,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === '/' && !document.querySelector('.open')) {
             e.preventDefault();
-            searchInput.focus();
+            const mobileSearch = document.getElementById('mobile-search-input');
+            const desktopSearch = document.getElementById('search-input');
+            // If sidebar is open on mobile, focus mobile search
+            if (sidebar.classList.contains('mobile-open') && mobileSearch) {
+                mobileSearch.focus();
+            } else if (desktopSearch) {
+                desktopSearch.focus();
+            }
         }
         if (e.key === 'Escape') {
             if (dataModalOverlay.classList.contains('open')) {
@@ -475,6 +496,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 function populateCategorySelect(store, selectedId = null) {
     const categoryOptionsContainer = document.getElementById('link-category-options');
     const hiddenInput = document.getElementById('link-category');
+    const categories = store.getCategories();
+    const selectedCategoryId = categories.some(category => category.id === selectedId)
+        ? selectedId
+        : 'uncategorized';
+
+    hiddenInput.value = selectedCategoryId;
     
     // Clear existing options
     categoryOptionsContainer.innerHTML = '';
@@ -483,7 +510,7 @@ function populateCategorySelect(store, selectedId = null) {
     const uncategorizedBtn = document.createElement('button');
     uncategorizedBtn.type = 'button';
     uncategorizedBtn.className = 'category-option max-w-full px-3 py-2 rounded-lg border text-sm transition-all ' + 
-        (selectedId === null || selectedId === 'uncategorized' ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
+        (selectedCategoryId === 'uncategorized' ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
     uncategorizedBtn.textContent = '未分类';
     uncategorizedBtn.dataset.categoryId = 'uncategorized';
     
@@ -504,13 +531,12 @@ function populateCategorySelect(store, selectedId = null) {
     categoryOptionsContainer.appendChild(uncategorizedBtn);
     
     // Add category options
-    const categories = store.getCategories();
     categories.forEach(category => {
         const categoryBtn = document.createElement('button');
         categoryBtn.type = 'button';
         categoryBtn.className = 'category-option flex max-w-full items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ' + 
-            (selectedId && selectedId === category.id ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
-        categoryBtn.innerHTML = `<i data-lucide="${category.icon}" class="w-4 h-4 shrink-0"></i><span class="min-w-0 truncate">${category.name}</span>`;
+            (selectedCategoryId === category.id ? 'bg-accent text-white border-accent' : 'bg-surface border-border text-textMain hover:bg-surfaceHover');
+        categoryBtn.innerHTML = `<i data-lucide="${sanitizeIconName(category.icon)}" class="w-4 h-4 shrink-0"></i><span class="min-w-0 truncate">${escapeHTML(category.name)}</span>`;
         categoryBtn.dataset.categoryId = category.id;
         
         categoryBtn.addEventListener('click', () => {
@@ -532,16 +558,11 @@ function populateCategorySelect(store, selectedId = null) {
         categoryOptionsContainer.appendChild(categoryBtn);
     });
     
-    // Set initial value if no category is selected
-    if (!selectedId) {
-        hiddenInput.value = 'uncategorized';
-    }
-    
     lucide.createIcons();
 }
 
 // Render category navigation
-function renderCategoryNav(store) {
+function renderCategoryNav(store, ui) {
     const categoryNav = document.getElementById('category-nav');
     const categories = store.getCategories();
     const allLinks = store.getAll();
@@ -560,9 +581,9 @@ function renderCategoryNav(store) {
     categories.forEach(category => {
         const count = store.getLinksByCategory(category.id).length;
         navHTML += `
-            <a href="#" class="category-nav-item category-nav-sortable flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === category.id ? 'active' : ''}" draggable="true" data-category="${category.id}" aria-label="${category.name}" title="${category.name}">
-                <i data-lucide="${category.icon}" class="w-5 h-5 shrink-0"></i>
-                <span class="category-nav-label">${category.name}</span>
+            <a href="#" class="category-nav-item category-nav-sortable flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === category.id ? 'active' : ''}" draggable="true" data-category="${escapeHTML(category.id)}" aria-label="${escapeHTML(category.name)}" title="${escapeHTML(category.name)}">
+                <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
+                <span class="category-nav-label">${escapeHTML(category.name)}</span>
                 <span class="category-nav-count ml-auto text-xs text-textMuted">(${count})</span>
             </a>
         `;
@@ -580,11 +601,9 @@ function renderCategoryNav(store) {
             item.classList.add('active');
             
             const categoryId = item.dataset.category;
-            const ui = new UI(store); // We need to access the UI to render
             if (categoryId === 'all') {
-                ui.render(store.getAll(), true); // 第二个参数为true表示按分类分组显示
+                ui.render(store.getAll(), true);
             } else {
-                // 对于具体分类，也按分组结构渲染，但只显示当前分类
                 ui.render(store.getLinksByCategory(categoryId), true);
             }
 
@@ -594,12 +613,12 @@ function renderCategoryNav(store) {
         });
     });
 
-    setupCategoryDragSort(categoryNav, store);
+    setupCategoryDragSort(categoryNav, store, ui);
     
     lucide.createIcons();
 }
 
-function setupCategoryDragSort(categoryNav, store) {
+function setupCategoryDragSort(categoryNav, store, ui) {
     let draggedItem = null;
 
     categoryNav.querySelectorAll('.category-nav-sortable').forEach(item => {
@@ -639,10 +658,9 @@ function setupCategoryDragSort(categoryNav, store) {
         store.reorderCategories(orderedIds);
 
         const categoryId = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
-        const ui = new UI(store);
         ui.render(categoryId === 'all' ? store.getAll() : store.getLinksByCategory(categoryId), true);
         populateCategorySelect(store);
-        renderCategoryNav(store);
+        renderCategoryNav(store, ui);
     };
 }
 
@@ -769,8 +787,7 @@ function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
     root.style.setProperty('--theme-reveal-y', `${centerY}px`);
     root.style.setProperty('--theme-reveal-radius', `${radius}px`);
 
-    const startTransition = document.startViewTransition?.bind(document);
-    if (!startTransition) {
+    if (!document.startViewTransition) {
         themeManager.toggle();
         if (typeof onThemeChanged === 'function') {
             onThemeChanged();
@@ -781,7 +798,7 @@ function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
         return;
     }
 
-    const transition = startTransition(() => {
+    const transition = document.startViewTransition(() => {
         themeManager.toggle();
         if (typeof onThemeChanged === 'function') {
             onThemeChanged();
@@ -796,13 +813,13 @@ function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
 }
 
 function refreshView(store, ui) {
-    const isGroupedByCategory = document.querySelector('.category-nav-item.active')?.dataset.category === 'all';
-    ui.render(store.search(document.getElementById('search-input').value), isGroupedByCategory);
-    renderCategoryNav(store);
+    const activeCategoryId = getActiveCategoryId();
+    ui.render(store.search(document.getElementById('search-input').value, activeCategoryId), true);
+    renderCategoryNav(store, ui);
     populateCategorySelect(store);
 }
 
-function openExportModal(store, handlers) {
+function openExportModal(store, ui, handlers) {
     const categories = store.getCategories();
     const categoryCards = [];
 
@@ -820,12 +837,12 @@ function openExportModal(store, handlers) {
         const count = store.getLinksByCategory(category.id).length;
         categoryCards.push(`
             <label class="flex items-center gap-3 rounded-2xl border border-border bg-surface/60 px-4 py-3 hover:bg-surface transition-colors">
-                <input type="checkbox" value="${category.id}" class="h-4 w-4 accent-[var(--accent-color)]" checked>
+                <input type="checkbox" value="${escapeHTML(category.id)}" class="h-4 w-4 accent-[var(--accent-color)]" checked>
                 <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-textMain">
-                    <i data-lucide="${category.icon}" class="w-4 h-4"></i>
+                    <i data-lucide="${sanitizeIconName(category.icon)}" class="w-4 h-4"></i>
                 </div>
                 <div class="min-w-0">
-                    <div class="truncate font-medium text-textMain">${category.name}</div>
+                    <div class="truncate font-medium text-textMain">${escapeHTML(category.name)}</div>
                     <div class="text-sm text-textMuted">${count} 条链接</div>
                 </div>
             </label>
@@ -859,7 +876,6 @@ function openExportModal(store, handlers) {
                     .map(input => input.value);
 
                 if (selectedCategoryIds.length === 0) {
-                    const ui = new UI(store);
                     ui.showToast('请至少选择一个分类');
                     return;
                 }
@@ -1002,10 +1018,10 @@ function renderCategoryList(store, ui, editingCategoryId = null) {
         categoryItem.innerHTML = `
             <div class="flex min-w-0 flex-1 items-center gap-3">
                 <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-border bg-background text-textMain">
-                    <i data-lucide="${category.icon}" class="w-5 h-5"></i>
+                    <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5"></i>
                 </div>
                 ${isEditing ? `
-                    <form class="category-rename-form min-w-0 flex-1" data-id="${category.id}">
+                    <form class="category-rename-form min-w-0 flex-1" data-id="${escapeHTML(category.id)}">
                         <input
                             type="text"
                             class="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-textMain outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/20"
@@ -1026,11 +1042,11 @@ function renderCategoryList(store, ui, editingCategoryId = null) {
             </div>
             <div class="flex flex-shrink-0 items-center gap-1">
                 ${isEditing ? '' : `
-                    <button data-id="${category.id}" class="btn-edit-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-border hover:bg-surfaceHover hover:text-textMain" title="重命名分类" aria-label="重命名分类">
+                    <button data-id="${escapeHTML(category.id)}" class="btn-edit-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-border hover:bg-surfaceHover hover:text-textMain" title="重命名分类" aria-label="重命名分类">
                         <i data-lucide="pencil" class="w-4 h-4"></i>
                     </button>
                 `}
-                <button data-id="${category.id}" class="btn-delete-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-red-200 hover:bg-red-500/10 hover:text-red-500" title="删除分类" aria-label="删除分类">
+                <button data-id="${escapeHTML(category.id)}" class="btn-delete-category flex h-10 w-10 items-center justify-center rounded-xl border border-transparent text-textMuted transition-colors hover:border-red-200 hover:bg-red-500/10 hover:text-red-500" title="删除分类" aria-label="删除分类">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -1076,7 +1092,7 @@ function renderCategoryList(store, ui, editingCategoryId = null) {
                 refreshView(store, ui);
                 ui.showToast('分类已重命名');
             } else {
-                renderCategoryNav(store);
+                renderCategoryNav(store, ui);
                 populateCategorySelect(store);
             }
         });
@@ -1102,7 +1118,7 @@ function renderCategoryList(store, ui, editingCategoryId = null) {
                     <div class="rounded-2xl border border-red-200 bg-red-500/5 px-4 py-3">
                         <div class="flex min-w-0 items-center gap-3">
                             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-textMain">
-                                <i data-lucide="${category.icon}" class="w-5 h-5"></i>
+                                <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5"></i>
                             </div>
                             <div class="min-w-0">
                                 <div class="truncate font-medium text-textMain">${escapeHTML(category.name)}</div>
@@ -1119,7 +1135,7 @@ function renderCategoryList(store, ui, editingCategoryId = null) {
                         refreshView(store, ui);
                         ui.showToast('分类已删除');
                     } else {
-                        renderCategoryNav(store);
+                        renderCategoryNav(store, ui);
                         populateCategorySelect(store);
                     }
                 }
