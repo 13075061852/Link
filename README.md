@@ -31,7 +31,7 @@ npx wrangler login
 npm run db:migrate
 ```
 
-Worker 也会在请求进入时兜底创建缺失的表，避免空库直接返回 500。
+数据库结构由 `migrations/` 管理；不要依赖本地 D1 副本保存正式数据。
 
 ## 部署
 
