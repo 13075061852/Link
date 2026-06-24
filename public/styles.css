@@ -325,16 +325,13 @@ body {
 }
 
 .link-container {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--link-card-min-width)), 1fr));
     gap: 0.75rem;
-    align-items: stretch;
 }
 
 .link-container > * {
-    flex: 0 1 var(--link-card-ideal-width);
-    min-width: min(100%, var(--link-card-min-width));
-    max-width: var(--link-card-max-width);
+    min-width: 0;
 }
 
 .category-section {
@@ -349,6 +346,6 @@ body {
     }
 
     .link-container > * {
-        flex-basis: 100%;
+        width: 100%;
     }
 }
