@@ -50,7 +50,7 @@ export class UI {
                 </div>
                 
                 <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex min-w-0 items-start gap-3 pr-12 outline-none">
-                    <div class="w-12 h-12 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5 sm:h-14 sm:w-14">
+                    <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5 sm:h-14 sm:w-14">
                         <img
                             src="${safeIconSrc}"
                             alt="${safeTitle}"
