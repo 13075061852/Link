@@ -1,4 +1,6 @@
 import { Store } from './store.js';
+import { DragSort } from './drag-sort.js';
+import { setupDialogs } from './dialogs.js';
 import { ThemeManager } from './theme.js';
 import { UI } from './ui.js';
 import { isValidUrl, debounce, sanitizeIconName } from './utils.js';
@@ -20,7 +22,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const store = new Store();
     const themeManager = new ThemeManager();
     const ui = new UI(store);
-    store.onSaveError = () => ui.showToast('保存到 Cloudflare 失败');
+    setupDialogs();
+    setupLinkDragSort(store, ui);
+    store.onSaveError = () => ui.showToast('云端保存失败，修改仍保留在当前页面，请点击重试');
+    store.onSaveState = state => {
+        const status = document.getElementById('sync-status');
+        status.dataset.state = state;
+        status.textContent = { saving: '正在同步…', saved: '已同步到云端', error: '同步失败 · 点击重试' }[state];
+        status.disabled = state !== 'error';
+    };
+    document.getElementById('sync-status').addEventListener('click', () => store._queueSave());
 
     try {
         await store.init();
@@ -32,15 +43,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <i data-lucide="cloud-off" class="w-5 h-5"></i>
                 </div>
                 <div class="font-medium text-textMain">无法加载 Cloudflare 存储</div>
-                <div class="mt-2 text-sm text-textMuted">请确认 Worker 已部署，并且 D1 数据库可用。</div>
+                <div class="mt-2 text-sm text-textMuted">请检查网络连接，或稍后重试。你的云端收藏不会受到影响。</div>
+                <button id="retry-load" class="mt-4 rounded-xl bg-textMain px-4 py-2 text-sm text-background">重新连接</button>
             </div>
         `;
+        document.getElementById('sync-status').textContent = '暂时无法连接云端';
+        document.getElementById('retry-load').addEventListener('click', () => location.reload());
         lucide.createIcons();
         return;
     }
     
 
     ui.init();
+    store.onSaveState('saved');
+    document.querySelectorAll('[data-view]').forEach(button => {
+        button.addEventListener('click', () => ui.setView(button.dataset.view));
+    });
+    document.getElementById('clear-search').addEventListener('click', () => {
+        document.getElementById('search-input').value = '';
+        document.getElementById('mobile-search-input').value = '';
+        refreshView(store, ui);
+    });
     populateCategorySelect(store);
     renderCategoryNav(store, ui);
 
@@ -63,10 +86,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     const addBtn = document.getElementById('add-btn');
-    addBtn.addEventListener('click', () => {
-        populateCategorySelect(store, getDefaultLinkCategoryId());
+    const emptyAddBtn = document.getElementById('empty-add-btn');
+    const openAddModal = () => {
         ui.openModal('add');
-    });
+        populateCategorySelect(store, getDefaultLinkCategoryId());
+    };
+
+    addBtn.addEventListener('click', openAddModal);
+    emptyAddBtn?.addEventListener('click', openAddModal);
+    document.getElementById('quick-add-btn').addEventListener('click', openAddModal);
 
     // Category management
     const manageCategoriesBtn = document.getElementById('manage-categories-btn');
@@ -130,8 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     mobileAddBtn.addEventListener('click', () => {
         closeMobileSidebar();
-        populateCategorySelect(store, getDefaultLinkCategoryId());
-        ui.openModal('add');
+        openAddModal();
     });
 
     mobileManageCategoriesBtn.addEventListener('click', () => {
@@ -266,6 +293,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('link-icon-upload').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
+            if (!file.type.startsWith('image/') || file.size > 190 * 1024) {
+                ui.showToast('请选择小于 190 KB 的图片');
+                e.target.value = '';
+                return;
+            }
             const reader = new FileReader();
             reader.onload = (event) => {
                 // 显示预览
@@ -315,6 +347,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!isValidUrl(url)) {
             ui.showToast('请输入有效的网址');
+            return;
+        }
+
+        if (!title) {
+            ui.showToast('请输入链接标题');
             return;
         }
 
@@ -403,24 +440,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const searchInput = document.getElementById('search-input');
 
-    const handleSearchInput = debounce((sourceInput, targetInput) => {
-        targetInput.value = sourceInput.value;
-        ui.handleSearch({ target: sourceInput }, getActiveCategoryId());
-    }, 200);
+    const handleSearchInput = debounce(() => {
+        ui.handleSearch({ target: searchInput }, getActiveCategoryId());
+    }, 100);
 
     searchInput.addEventListener('input', () => {
-        handleSearchInput(searchInput, mobileSearchInput);
+        mobileSearchInput.value = searchInput.value;
+        handleSearchInput();
     });
 
     mobileSearchInput.addEventListener('input', () => {
-        handleSearchInput(mobileSearchInput, searchInput);
+        searchInput.value = mobileSearchInput.value;
+        handleSearchInput();
     });
 
 
     const grid = document.getElementById('link-grid');
-    grid.addEventListener('click', (e) => {
+    grid.addEventListener('click', async (e) => {
+        const copyBtn = e.target.closest('.btn-copy');
         const editBtn = e.target.closest('.btn-edit');
         const deleteBtn = e.target.closest('.btn-delete');
+
+        if (copyBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                await copyToClipboard(copyBtn.dataset.url || '');
+                ui.showToast('网址已复制');
+            } catch (error) {
+                console.error(error);
+                ui.showToast('复制失败，请手动复制');
+            }
+            return;
+        }
 
         if (editBtn) {
             const id = editBtn.dataset.id;
@@ -459,12 +511,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === '/' && !document.querySelector('.open')) {
+        const typing = e.target.closest('input, textarea, select, [contenteditable="true"]');
+        if (!typing && (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && !document.querySelector('.open')) {
             e.preventDefault();
             const mobileSearch = document.getElementById('mobile-search-input');
             const desktopSearch = document.getElementById('search-input');
             // If sidebar is open on mobile, focus mobile search
-            if (sidebar.classList.contains('mobile-open') && mobileSearch) {
+            if (window.matchMedia('(max-width: 767px)').matches && mobileSearch) {
+                openMobileSidebar();
                 mobileSearch.focus();
             } else if (desktopSearch) {
                 desktopSearch.focus();
@@ -491,6 +545,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
+async function copyToClipboard(text) {
+    if (!text) return;
+
+    if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+}
+
+function setupLinkDragSort(store, ui) {
+    const grid = document.getElementById('link-grid');
+    new DragSort(grid, {
+        item: '[data-link-card]',
+        handle: '.link-drag-handle',
+        containers: () => [...grid.querySelectorAll('.link-container')],
+        disabled: () => !!document.getElementById('search-input').value.trim(),
+        announce: message => { document.getElementById('sort-announcer').textContent = message; },
+        onDrop: ({ item, source, target, items }) => {
+            const categoryId = target.dataset.categoryId === 'all' ? getActiveCategoryId() : target.dataset.categoryId;
+            const ids = items.map(card => card.dataset.linkId);
+            if (categoryId === 'all') store.reorderLinks(ids);
+            else store.moveAndReorderLink(item.dataset.linkId, categoryId, ids);
+            // Same-group sorts already have the correct DOM. Avoid a full repaint.
+            if (source !== target) refreshView(store, ui);
+        }
+    });
+}
 
 // Populate category select dropdown
 function populateCategorySelect(store, selectedId = null) {
@@ -568,12 +660,18 @@ function renderCategoryNav(store, ui) {
     const allLinks = store.getAll();
     const activeCategory = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
     
-    // Add "全部" category
+    // Add "全部" and "未分类"
+    const uncategorizedCount = allLinks.filter(link => !link.categoryId || link.categoryId === 'uncategorized').length;
     let navHTML = `
         <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === 'all' ? 'active' : ''}" data-category="all" aria-label="全部" title="全部">
             <i data-lucide="layout-grid" class="w-5 h-5 shrink-0"></i>
             <span class="category-nav-label">全部</span>
             <span class="category-nav-count ml-auto text-xs text-textMuted">(${allLinks.length})</span>
+        </a>
+        <a href="#" class="category-nav-item flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === 'uncategorized' ? 'active' : ''}" data-category="uncategorized" aria-label="未分类" title="未分类">
+            <i data-lucide="folder" class="w-5 h-5 shrink-0"></i>
+            <span class="category-nav-label">未分类</span>
+            <span class="category-nav-count ml-auto text-xs text-textMuted">(${uncategorizedCount})</span>
         </a>
     `;
     
@@ -581,10 +679,11 @@ function renderCategoryNav(store, ui) {
     categories.forEach(category => {
         const count = store.getLinksByCategory(category.id).length;
         navHTML += `
-            <a href="#" class="category-nav-item category-nav-sortable flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === category.id ? 'active' : ''}" draggable="true" data-category="${escapeHTML(category.id)}" aria-label="${escapeHTML(category.name)}" title="${escapeHTML(category.name)}">
+            <a href="#" class="category-nav-item category-nav-sortable flex items-center gap-3 p-3 rounded-lg text-textMain mb-1 ${activeCategory === category.id ? 'active' : ''}" draggable="false" data-category="${escapeHTML(category.id)}" aria-label="${escapeHTML(category.name)}" title="${escapeHTML(category.name)}">
                 <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
                 <span class="category-nav-label">${escapeHTML(category.name)}</span>
-                <span class="category-nav-count ml-auto text-xs text-textMuted">(${count})</span>
+                <span class="category-nav-count ml-auto text-xs text-textMuted">${count}</span>
+                <span class="category-drag-handle" role="button" tabindex="0" aria-label="排序 ${escapeHTML(category.name)}，按 Alt 加方向键移动" title="拖拽排序 · Alt + ↑/↓"><i data-lucide="grip-vertical" class="w-3.5 h-3.5"></i></span>
             </a>
         `;
     });
@@ -595,17 +694,15 @@ function renderCategoryNav(store, ui) {
     document.querySelectorAll('.category-nav-item').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
+            if (e.target.closest('.category-drag-handle')) return;
             document.querySelectorAll('.category-nav-item').forEach(navItem => {
                 navItem.classList.remove('active');
             });
             item.classList.add('active');
             
             const categoryId = item.dataset.category;
-            if (categoryId === 'all') {
-                ui.render(store.getAll(), true);
-            } else {
-                ui.render(store.getLinksByCategory(categoryId), true);
-            }
+            const searchValue = document.getElementById('search-input')?.value || '';
+            ui.render(store.search(searchValue, categoryId), true);
 
             document.querySelector('.category-sidebar')?.classList.remove('mobile-open');
             document.getElementById('mobile-sidebar-backdrop')?.classList.remove('active');
@@ -619,49 +716,18 @@ function renderCategoryNav(store, ui) {
 }
 
 function setupCategoryDragSort(categoryNav, store, ui) {
-    let draggedItem = null;
-
-    categoryNav.querySelectorAll('.category-nav-sortable').forEach(item => {
-        item.addEventListener('dragstart', (event) => {
-            draggedItem = item;
-            item.classList.add('dragging');
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', item.dataset.category);
-        });
-
-        item.addEventListener('dragend', () => {
-            item.classList.remove('dragging');
-            categoryNav.querySelectorAll('.drag-over').forEach(navItem => navItem.classList.remove('drag-over'));
-            draggedItem = null;
-        });
+    if (categoryNav.sorter) return;
+    categoryNav.sorter = new DragSort(categoryNav, {
+        item: '.category-nav-sortable',
+        handle: '.category-drag-handle',
+        containers: () => [categoryNav],
+        announce: message => { document.getElementById('sort-announcer').textContent = message; },
+        onDrop: ({ items }) => {
+            store.reorderCategories(items.map(item => item.dataset.category));
+            ui.render(store.search(document.getElementById('search-input').value, getActiveCategoryId()), true);
+            populateCategorySelect(store);
+        }
     });
-
-    categoryNav.ondragover = (event) => {
-        if (!draggedItem) return;
-        event.preventDefault();
-
-        const target = event.target.closest('.category-nav-sortable');
-        if (!target || target === draggedItem) return;
-
-        const targetRect = target.getBoundingClientRect();
-        const shouldInsertAfter = event.clientY > targetRect.top + targetRect.height / 2;
-        categoryNav.insertBefore(draggedItem, shouldInsertAfter ? target.nextSibling : target);
-    };
-
-    categoryNav.ondrop = (event) => {
-        if (!draggedItem) return;
-        event.preventDefault();
-
-        const orderedIds = Array.from(categoryNav.querySelectorAll('.category-nav-sortable'))
-            .map(item => item.dataset.category)
-            .filter(Boolean);
-        store.reorderCategories(orderedIds);
-
-        const categoryId = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
-        ui.render(categoryId === 'all' ? store.getAll() : store.getLinksByCategory(categoryId), true);
-        populateCategorySelect(store);
-        renderCategoryNav(store, ui);
-    };
 }
 
 // Open category management modal
@@ -688,7 +754,7 @@ function closeCategoryModal() {
     categoryModalContent.classList.remove('open');
     
     setTimeout(() => {
-        categoryModalOverlay.classList.add('hidden');
+        if (!categoryModalOverlay.classList.contains('open')) categoryModalOverlay.classList.add('hidden');
     }, 200);
 }
 
@@ -731,7 +797,7 @@ function closeDataModal(overlay, content) {
     content.classList.remove('open');
 
     setTimeout(() => {
-        overlay.classList.add('hidden');
+        if (!overlay.classList.contains('open')) overlay.classList.add('hidden');
     }, 200);
 }
 

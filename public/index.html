@@ -2,7 +2,15 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f5f7fb">
+    <meta name="description" content="小Link，你的私人链接收藏空间。收藏灵感，轻松抵达。">
+    <script>
+        try {
+            const theme = localStorage.getItem('nexus_theme_preference');
+            document.documentElement.classList.toggle('dark', theme === 'dark' || (!theme && matchMedia('(prefers-color-scheme: dark)').matches));
+        } catch (_) {}
+    </script>
     <title>小Link - 网址管理</title>
     <link rel="icon" type="image/png" href="assets/site-icon.png">
     <link rel="apple-touch-icon" href="assets/site-icon.png">
@@ -34,23 +42,31 @@
 </head>
 <body class="bg-background text-textMain transition-colors duration-300 h-screen overflow-hidden selection:bg-accent selection:text-white antialiased">
 
-    <div class="fixed inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] mask-fade"></div>
+    <div class="ambient-background" aria-hidden="true"></div>
+    <div id="sort-announcer" class="sr-only" role="status" aria-live="polite"></div>
+    <div id="search-status" class="sr-only" role="status" aria-live="polite"></div>
 
     <div class="relative z-10 flex h-screen flex-col overflow-hidden">
         <!-- 顶部导航栏 -->
         <header class="sticky top-0 z-50 backdrop-blur-md border-b border-border bg-background/80 transition-colors duration-300">
             <div class="mx-auto flex h-16 items-center gap-3 px-4 sm:px-6">
                 <button id="mobile-sidebar-toggle" class="mr-auto flex shrink-0 items-center gap-3 group md:cursor-default" aria-label="展开侧边栏" aria-expanded="false">
-                    <div class="p-2 rounded-lg bg-gradient-to-tr from-neutral-800 to-neutral-600 text-white shadow-lg group-hover:scale-105 transition-transform duration-300">
+                    <div class="brand-mark p-2 rounded-lg text-white shadow-lg group-hover:scale-105 transition-transform duration-300">
                         <i data-lucide="layout-grid" class="w-5 h-5"></i>
                     </div>
-                    <span class="font-semibold text-lg tracking-tight">小Link</span>
+                    <span class="brand-name font-semibold text-lg tracking-tight">小Link</span>
                 </button>
 
-                <div class="hidden items-center justify-end gap-3 md:flex">
+                <button id="clear-search" class="clear-search" hidden>清空搜索</button>
+                <div class="view-switch" role="group" aria-label="显示方式">
+                    <button data-view="grid" aria-label="卡片视图" title="卡片视图" aria-pressed="true"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
+                    <button data-view="list" aria-label="列表视图" title="列表视图" aria-pressed="false"><i data-lucide="list" class="w-4 h-4"></i></button>
+                </div>
+                <button id="quick-add-btn" class="quick-add" aria-label="添加链接" title="添加链接"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                <div class="desktop-tools hidden items-center justify-end gap-3 md:flex">
                     <div class="relative group w-64">
                         <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted group-focus-within:text-accent transition-colors"></i>
-                        <input type="text" id="search-input" placeholder="搜索链接..." class="w-full bg-surface border border-border rounded-full py-1.5 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
+                        <input type="text" id="search-input" aria-label="搜索链接" placeholder="搜索收藏…  /" class="w-full bg-surface border border-border rounded-full py-1.5 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
                     </div>
                     
                     <button id="theme-toggle" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="切换主题">
@@ -93,7 +109,7 @@
                     </div>
                     <div class="relative group mb-3">
                         <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted group-focus-within:text-accent transition-colors"></i>
-                        <input type="text" id="mobile-search-input" placeholder="搜索链接..." class="w-full bg-background border border-border rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
+                        <input type="text" id="mobile-search-input" aria-label="搜索链接" placeholder="搜索收藏…" class="w-full bg-background border border-border rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
                     </div>
                     <div class="grid grid-cols-4 gap-2">
                         <button id="mobile-theme-toggle" class="mobile-tool-button" aria-label="切换主题">
@@ -115,20 +131,26 @@
                         <span>添加</span>
                     </button>
                 </div>
-                <nav class="p-2" id="category-nav">
+                <div class="sidebar-heading">资料库 <span>LIBRARY</span></div>
+                <nav class="p-2" id="category-nav" aria-label="链接分类">
                     <!-- 分类导航项将通过JavaScript动态生成 -->
                 </nav>
+                <button id="sync-status" class="sync-status" disabled aria-live="polite" data-state="saving">正在连接云端…</button>
             </aside>
 
             <!-- 页面主要内容 -->
             <main class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
                 <div class="content-shell mx-auto">
-                    <div id="empty-state" class="hidden flex-col items-center justify-center py-24 text-center animate-fade-in">
-                        <div class="bg-surface p-4 rounded-2xl border border-border mb-4 shadow-sm">
+                    <div id="empty-state" class="hidden flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-surface/50 py-20 text-center animate-fade-in">
+                        <div class="bg-background p-4 rounded-2xl border border-border mb-4 shadow-sm">
                             <i data-lucide="inbox" class="w-8 h-8 text-textMuted"></i>
                         </div>
                         <h3 class="text-lg font-medium text-textMain mb-1">暂无链接</h3>
                         <p class="text-textMuted text-sm mb-6">开始收藏你常用的网站吧</p>
+                        <button id="empty-add-btn" class="inline-flex items-center gap-2 rounded-full bg-textMain px-4 py-2 text-sm font-medium text-background shadow-lg shadow-textMain/10 transition-all hover:opacity-90 active:scale-95">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            添加第一个链接
+                        </button>
                     </div>
 
                     <div id="link-grid" class="space-y-8">
@@ -159,7 +181,7 @@
                                 <form id="category-form" class="space-y-4 p-5">
                                     <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                                         <div class="flex-1">
-                                            <input type="text" id="category-name" placeholder="分类名称" class="w-full bg-background border border-border rounded-xl px-4 py-3 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
+                                            <input type="text" id="category-name" maxlength="80" aria-label="分类名称" placeholder="分类名称" class="w-full bg-background border border-border rounded-xl px-4 py-3 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
                                         </div>
                                         <button type="submit" form="category-form" class="h-[50px] shrink-0 px-5 rounded-xl text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md sm:w-auto">添加分类</button>
                                     </div>
@@ -269,11 +291,11 @@
                         <input type="hidden" id="link-id">
                         <div>
                             <label for="link-title" class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">标题</label>
-                            <input type="text" id="link-title" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="例如：GitHub">
+                            <input type="text" id="link-title" maxlength="200" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="例如：GitHub">
                         </div>
                         <div>
                             <label for="link-url" class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">网址</label>
-                            <input type="url" id="link-url" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="https://...">
+                            <input type="text" inputmode="url" autocapitalize="off" spellcheck="false" id="link-url" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="https://...">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">分类</label>
@@ -303,7 +325,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="text-xs text-textMuted">支持 JPG, PNG, GIF 格式，建议尺寸 64x64 像素</div>
+                                <div class="text-xs text-textMuted">支持 JPG、PNG、GIF，最大 190 KB，建议尺寸 64 × 64 像素</div>
                             </div>
                         </div>
                         
@@ -317,7 +339,7 @@
         </div>
 
         <!-- Toast Container -->
-        <div id="toast-container" class="fixed bottom-4 left-4 right-4 z-[70] flex flex-col gap-2 pointer-events-none sm:bottom-6 sm:left-auto sm:right-6"></div>
+        <div id="toast-container" role="status" aria-live="polite" class="fixed bottom-4 left-4 right-4 z-[70] flex flex-col gap-2 pointer-events-none sm:bottom-6 sm:left-auto sm:right-6"></div>
 
         <!-- Data Import/Export Modal -->
         <div id="data-modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[70] hidden opacity-0 transition-opacity duration-200">
@@ -349,8 +371,8 @@
                     <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
                         <i data-lucide="upload-cloud" class="w-6 h-6"></i>
                     </div>
-                    <div class="text-lg font-semibold text-textMain">Drop JSON file to import</div>
-                    <div class="mt-2 text-sm text-textMuted">You can choose replace or append after the file is loaded.</div>
+                    <div class="text-lg font-semibold text-textMain">拖入 JSON 备份文件即可导入</div>
+                    <div class="mt-2 text-sm text-textMuted">读取完成后可选择覆盖或追加到现有数据。</div>
                 </div>
             </div>
         </div>

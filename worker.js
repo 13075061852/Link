@@ -31,6 +31,7 @@ async function handleDataRequest(request, env) {
             env.DB.prepare(`
                 SELECT id, name, icon
                 FROM categories
+                WHERE id != 'uncategorized'
                 ORDER BY sort_order ASC, name ASC
             `).all(),
             env.DB.prepare(`
@@ -145,6 +146,10 @@ function normalizePayload(payload) {
         const name = normalizeString(category.name, 80);
         if (!id || !name) {
             return { error: 'Each category needs a non-empty id and name' };
+        }
+
+        if (id === 'uncategorized') {
+            continue;
         }
 
         if (categoryIds.has(id)) {

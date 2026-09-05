@@ -10,6 +10,9 @@ export class UI {
         this.linkForm = document.getElementById('link-form');
         this.modalTitle = document.getElementById('modal-title');
         this.searchInput = document.getElementById('search-input');
+        this.afterRender = null;
+        try { this.view = localStorage.getItem('link_view') === 'list' ? 'list' : 'grid'; }
+        catch (_) { this.view = 'grid'; }
         
 
         this.render = this.render.bind(this);
@@ -19,41 +22,42 @@ export class UI {
     init() {
         // 默认按分类分组显示
         this.render(this.store.getAll(), true);
+        this.setView(this.view);
         lucide.createIcons();
+    }
+
+    setView(view) {
+        if (document.body.classList.contains('is-sorting')) return;
+        this.view = view === 'list' ? 'list' : 'grid';
+        this.grid.classList.toggle('list-view', this.view === 'list');
+        document.querySelectorAll('[data-view]').forEach(button => {
+            button.setAttribute('aria-pressed', String(button.dataset.view === this.view));
+        });
+        try { localStorage.setItem('link_view', this.view); } catch (_) {}
     }
 
     createCardHTML(link) {
         const favicon = getFaviconUrl(link.url);
         const faviconAlt = getFaviconUrlAlt(link.url);
-        const hostname = new URL(link.url).hostname;
-        const category = this.store.getCategoryById(link.categoryId);
+        const hostname = new URL(link.url).hostname.replace(/^www\./, '');
         const iconData = link.iconData;
         const iconSrc = iconData || favicon;
         const fallbackSrc = iconData ? favicon : faviconAlt;
-        const categoryIcon = sanitizeIconName(category.icon);
+        const safeId = escapeHTML(link.id);
         const safeTitle = escapeHTML(link.title);
         const safeUrl = escapeHTML(link.url);
-        const safeCategoryName = escapeHTML(category.name);
         const safeIconSrc = escapeHTML(iconSrc);
         const safeFallbackSrc = escapeHTML(fallbackSrc);
         const safeHostname = escapeHTML(hostname);
 
         return `
-            <div class="group relative h-full bg-surface border border-border rounded-xl p-3 card-hover animate-fade-in select-none">
-                <div class="absolute top-2.5 right-2.5 flex gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <button data-id="${link.id}" class="btn-edit p-1.5 rounded-md text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="编辑">
-                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <button data-id="${link.id}" class="btn-delete p-1.5 rounded-md text-textMuted hover:bg-red-500/10 hover:text-red-500 transition-colors" title="删除">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                    </button>
-                </div>
-                
-                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="flex min-w-0 items-start gap-3 pr-12 outline-none">
-                    <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5 sm:h-14 sm:w-14">
+            <div class="link-card group relative h-full overflow-hidden rounded-2xl border border-border bg-surface p-3 card-hover select-none" data-link-card data-link-id="${safeId}" draggable="false">
+                <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" draggable="false" class="card-link flex min-w-0 items-center gap-2">
+                    <div class="card-icon relative flex flex-shrink-0 items-center justify-center overflow-hidden border border-border bg-background">
                         <img
                             src="${safeIconSrc}"
-                            alt="${safeTitle}"
+                            alt="" loading="lazy" decoding="async" draggable="false"
                             class="w-full h-full object-contain"
                             data-fallback="${safeFallbackSrc}"
                             onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback='';}else{this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');}"
@@ -61,19 +65,39 @@ export class UI {
                         <i data-lucide="link" class="hidden w-8 h-8 text-textMuted"></i>
                     </div>
                     <div class="flex-1 min-w-0 max-w-full">
-                        <h3 class="text-sm font-medium text-textMain truncate">${safeTitle}</h3>
-                        <div class="flex items-center gap-1 mt-0.5">
-                            <i data-lucide="${categoryIcon}" class="w-3 h-3 shrink-0 text-textMuted"></i>
-                            <span class="text-xs text-textMuted truncate">${safeCategoryName}</span>
-                        </div>
-                        <p class="text-sm text-textMuted truncate mt-0.5 group-hover:text-accent transition-colors font-mono opacity-80 text-xs">${safeHostname}</p>
+                        <h3 class="link-title pr-1 text-sm font-semibold leading-snug text-textMain" title="${safeTitle}">${safeTitle}</h3>
+                        <p class="link-host mt-1 font-mono text-xs text-textMuted opacity-80 transition-colors group-hover:text-accent">${safeHostname}</p>
                     </div>
                 </a>
+                <div class="card-footer flex items-center justify-between gap-2">
+                    <button type="button" class="link-drag-handle flex min-w-0 items-center gap-1 text-[11px] font-medium text-textMuted" aria-label="排序 ${safeTitle}，按 Alt 加方向键移动" title="拖动手柄排序 · Alt + 方向键">
+                        <i data-lucide="grip-horizontal" class="w-4 h-4 shrink-0"></i>
+                    </button>
+                    <div class="card-actions flex shrink-0 gap-0.5">
+                        <button data-url="${safeUrl}" class="btn-copy p-1.5 rounded-full text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="复制网址" aria-label="复制网址">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button data-id="${safeId}" class="btn-edit p-1.5 rounded-full text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="编辑" aria-label="编辑链接">
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button data-id="${safeId}" class="btn-delete p-1.5 rounded-full text-textMuted hover:bg-red-500/10 hover:text-red-500 transition-colors" title="删除" aria-label="删除链接">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     render(links, groupedByCategory = false) {
+        const query = this.searchInput.value.trim();
+        const activeId = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
+        document.getElementById('search-status').textContent = query ? `找到 ${links.length} 个链接，清空搜索后可拖拽排序` : '';
+        document.getElementById('clear-search').hidden = !query;
+        this.grid.classList.toggle('link-drag-disabled', !!query);
+        this.emptyState.querySelector('h3').textContent = query ? '没有找到匹配的链接' : '留一个位置，给下一个灵感';
+        this.emptyState.querySelector('p').textContent = query ? '试试其他关键词，或清空搜索查看全部收藏。' : '把常用的网站收藏在这里，随时轻松抵达。';
+
         if (links.length === 0) {
             this.grid.innerHTML = '';
             this.grid.classList.add('hidden');
@@ -102,7 +126,7 @@ export class UI {
                                 <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
                                 <span class="truncate">${escapeHTML(category.name)}</span>
                             </h2>
-                            <div class="link-container">
+                            <div class="link-container" data-category-id="${escapeHTML(category.id)}">
                                 ${links.map(link => this.createCardHTML(link)).join('')}
                             </div>
                         </div>
@@ -118,7 +142,7 @@ export class UI {
                                     <i data-lucide="folder" class="w-5 h-5 shrink-0"></i>
                                     <span class="truncate">未分类</span>
                                 </h2>
-                                <div class="link-container">
+                                <div class="link-container" data-category-id="uncategorized">
                                     ${uncategorizedLinks.map(link => this.createCardHTML(link)).join('')}
                                 </div>
                             </div>
@@ -135,7 +159,7 @@ export class UI {
                                         <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
                                         <span class="truncate">${escapeHTML(category.name)}</span>
                                     </h2>
-                                    <div class="link-container">
+                                    <div class="link-container" data-category-id="${escapeHTML(category.id)}">
                                         ${categoryLinks.map(link => this.createCardHTML(link)).join('')}
                                     </div>
                                 </div>
@@ -148,13 +172,31 @@ export class UI {
             } else {
                 // 默认平铺显示
                 this.grid.innerHTML = `
-                    <div class="link-container">
+                    <div class="link-container" data-category-id="all">
                         ${links.map(link => this.createCardHTML(link)).join('')}
                     </div>
                 `;
             }
         }
+        // Empty groups remain available as cross-category drop targets.
+        if (groupedByCategory && activeId === 'all' && !query && links.length) {
+            const present = new Set([...this.grid.querySelectorAll('.link-container')].map(el => el.dataset.categoryId));
+            const categories = [{ id: 'uncategorized', name: '未分类', icon: 'folder' }, ...this.store.getCategories()];
+            for (const category of categories) {
+                if (present.has(category.id)) continue;
+                const section = document.createElement('section');
+                section.className = 'category-section empty-category';
+                section.innerHTML = `<h2><i data-lucide="${sanitizeIconName(category.icon)}" class="w-4 h-4"></i><span>${escapeHTML(category.name)}</span></h2><div class="link-container" data-category-id="${escapeHTML(category.id)}"></div>`;
+                this.grid.append(section);
+            }
+            // Keep empty destinations after actual collections so the first
+            // screen, especially on phones, prioritizes saved links.
+        }
+        this.grid.querySelectorAll('.link-drag-handle').forEach(button => { button.disabled = !!query; });
         lucide.createIcons();
+        if (typeof this.afterRender === 'function') {
+            this.afterRender();
+        }
     }
 
     handleSearch(e, categoryId = 'all') {
@@ -232,6 +274,7 @@ export class UI {
         this.modalContent.classList.remove('open');
         
         setTimeout(() => {
+            if (this.modalOverlay.classList.contains('open')) return;
             this.modalOverlay.classList.add('hidden');
             this.linkForm.reset();
         }, 200); // Match CSS transition duration

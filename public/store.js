@@ -75,6 +75,10 @@ export class Store {
         this.categories = [];
         this._saveQueue = Promise.resolve();
         this.onSaveError = null;
+        this.onSaveState = null;
+        this._revision = 0;
+        this._savedRevision = 0;
+        this._saving = false;
     }
 
     async init() {
@@ -88,24 +92,13 @@ export class Store {
         }
 
         const data = await response.json();
-        this.links = this._normalizeLinks(data.links, { allowEmpty: true });
+        if (!Array.isArray(data.links) || !Array.isArray(data.categories)) {
+            throw new Error('云端数据格式不正确');
+        }
+        // An empty collection is intentional, not a reason to restore demo data.
         this.categories = this._normalizeCategories(data.categories, { allowEmpty: true });
-
-        let needsSave = false;
-
-        if (this.links.length === 0) {
-            this.links = [...defaultLinks];
-            needsSave = true;
-        }
-
-        if (this.categories.length === 0) {
-            this.categories = [...defaultCategories];
-            needsSave = true;
-        }
-
-        if (!Array.isArray(data.links) || !Array.isArray(data.categories) || needsSave) {
-            await this._saveRemote();
-        }
+        this.links = this._normalizeLinks(data.links, { allowEmpty: true });
+        this.links.forEach(link => { link.categoryId = this._normalizeCategoryId(link.categoryId); });
     }
 
     _serialize() {
@@ -135,16 +128,28 @@ export class Store {
     }
 
     _queueSave() {
-        this._saveQueue = this._saveQueue
-            .catch(() => {})
-            .then(() => this._saveRemote())
-            .catch(error => {
-                console.error(error);
-                if (typeof this.onSaveError === 'function') {
-                    this.onSaveError(error);
+        this._revision += 1;
+        this.onSaveState?.('saving');
+        if (this._saving) return this._saveQueue;
+        this._saving = true;
+        // Coalesce rapid reorders into the latest snapshot instead of writing
+        // the whole D1 collection once for every intermediate pointer gesture.
+        this._saveQueue = Promise.resolve().then(async () => {
+            try {
+                while (this._savedRevision < this._revision) {
+                    const revision = this._revision;
+                    await this._saveRemote();
+                    this._savedRevision = revision;
                 }
-            });
-
+                this.onSaveState?.('saved');
+            } catch (error) {
+                console.error(error);
+                this.onSaveState?.('error');
+                this.onSaveError?.(error);
+            } finally {
+                this._saving = false;
+            }
+        });
         return this._saveQueue;
     }
 
@@ -161,7 +166,7 @@ export class Store {
                 name: normalizeString(category.name),
                 icon: sanitizeIconName(category.icon)
             }))
-            .filter(category => category.id && category.name && !seen.has(category.id) && seen.add(category.id));
+            .filter(category => category.id && category.id !== 'uncategorized' && category.name && !seen.has(category.id) && seen.add(category.id));
 
         if (normalized.length > 0) {
             return normalized;
@@ -199,6 +204,22 @@ export class Store {
         return [...this.links].sort((a, b) => b.createdAt - a.createdAt);
     }
 
+    getStats() {
+        const domains = new Set();
+        this.links.forEach(link => {
+            try {
+                domains.add(new URL(link.url).hostname.replace(/^www\./, ''));
+            } catch (_) {}
+        });
+
+        return {
+            totalLinks: this.links.length,
+            categories: this.categories.length,
+            uncategorized: this.links.filter(link => !link.categoryId || link.categoryId === 'uncategorized').length,
+            domains: domains.size
+        };
+    }
+
     add(linkData) {
         const newLink = {
             id: generateId(),
@@ -223,6 +244,56 @@ export class Store {
         return null;
     }
 
+    moveAndReorderLink(id, targetCategoryId, orderedIds) {
+        const link = this.links.find(item => item.id === id);
+        if (!link) {
+            return null;
+        }
+
+        const categoryId = this._normalizeCategoryId(targetCategoryId);
+        link.categoryId = categoryId;
+        this.reorderLinks(orderedIds, { categoryId, skipSave: true });
+        this._queueSave();
+        return link;
+    }
+
+    reorderLinks(orderedIds, { categoryId = null, skipSave = false } = {}) {
+        const ids = Array.isArray(orderedIds) ? orderedIds.filter(Boolean) : [];
+        if (ids.length === 0) {
+            return this.getAll();
+        }
+
+        const categoryScope = categoryId ? this._normalizeCategoryId(categoryId) : null;
+        const linkById = new Map(this.links.map(link => [link.id, link]));
+        const seen = new Set();
+        const orderedLinks = ids
+            .map(linkId => linkById.get(linkId))
+            .filter(link => {
+                if (!link || seen.has(link.id)) return false;
+                if (categoryScope && this._normalizeCategoryId(link.categoryId) !== categoryScope) return false;
+                seen.add(link.id);
+                return true;
+            });
+
+        const scopedLinks = categoryScope
+            ? this.links.filter(link => this._normalizeCategoryId(link.categoryId) === categoryScope)
+            : this.links;
+        const remainingLinks = scopedLinks
+            .filter(link => !seen.has(link.id))
+            .sort((a, b) => b.createdAt - a.createdAt);
+
+        const now = Date.now();
+        [...orderedLinks, ...remainingLinks].forEach((link, index) => {
+            link.createdAt = now - index;
+        });
+
+        if (!skipSave) {
+            this._queueSave();
+        }
+
+        return this.getAll();
+    }
+
     remove(id) {
         this.links = this.links.filter(l => l.id !== id);
         this._queueSave();
@@ -235,6 +306,14 @@ export class Store {
     
     getCategoryById(id) {
         return this.categories.find(c => c.id === id) || { id: 'uncategorized', name: '未分类', icon: 'folder' };
+    }
+
+    _normalizeCategoryId(id) {
+        const normalized = normalizeString(id, 'uncategorized');
+        if (normalized === 'uncategorized') {
+            return 'uncategorized';
+        }
+        return this.categories.some(category => category.id === normalized) ? normalized : 'uncategorized';
     }
     
     addCategory(categoryData) {
@@ -263,7 +342,7 @@ export class Store {
     }
 
     reorderCategories(categoryIds) {
-        const nextOrder = Array.isArray(categoryIds) ? categoryIds : [];
+        const nextOrder = Array.isArray(categoryIds) ? [...new Set(categoryIds)] : [];
         const categoryById = new Map(this.categories.map(category => [category.id, category]));
         const reordered = nextOrder
             .map(id => categoryById.get(id))
@@ -285,7 +364,10 @@ export class Store {
     }
     
     getLinksByCategory(categoryId) {
-        return this.links.filter(link => link.categoryId === categoryId);
+        const normalizedCategoryId = this._normalizeCategoryId(categoryId);
+        return this.links
+            .filter(link => this._normalizeCategoryId(link.categoryId) === normalizedCategoryId)
+            .sort((a, b) => b.createdAt - a.createdAt);
     }
 
     search(query, categoryId = null) {
@@ -295,7 +377,10 @@ export class Store {
             link.url.toLowerCase().includes(lowerQuery)
         );
         if (categoryId && categoryId !== 'all') {
-            return results.filter(link => link.categoryId === categoryId).sort((a, b) => b.createdAt - a.createdAt);
+            const normalizedCategoryId = this._normalizeCategoryId(categoryId);
+            return results
+                .filter(link => this._normalizeCategoryId(link.categoryId) === normalizedCategoryId)
+                .sort((a, b) => b.createdAt - a.createdAt);
         }
         return results.sort((a, b) => b.createdAt - a.createdAt);
     }
@@ -329,8 +414,8 @@ export class Store {
     }
 
     importData(payload, options = {}) {
-        if (!isRecord(payload)) {
-            throw new Error("Invalid import file format");
+        if (!isRecord(payload) || !Array.isArray(payload.links) || !Array.isArray(payload.categories)) {
+            throw new Error('备份文件需要包含 links 和 categories 数组');
         }
 
         const mode = options.mode === 'append' ? 'append' : 'replace';

@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .deploy-pages/
 *.log
+/test-results/
+/playwright-report/
