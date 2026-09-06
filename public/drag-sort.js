@@ -1,6 +1,9 @@
 // Shared pointer sorter. Only the floating preview moves every frame; layout changes
 // are batched and siblings use compositor-only FLIP animations.
-const SPRING = 'cubic-bezier(.22, 1.15, .36, 1)';
+// Sorting needs to arrive without overshooting into a neighbour's slot.
+const SORT_EASING = 'cubic-bezier(.2, .8, .2, 1)';
+const SORT_DURATION = 220;
+const INSERT_HYSTERESIS = 10;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 let activeSorter = null;
 
@@ -158,14 +161,25 @@ export class DragSort {
     locate() {
         const state = this.state;
         const containers = this.containers();
-        const container = containers.find(el => {
-            const r = el.getBoundingClientRect();
-            return state.x >= r.left - 8 && state.x <= r.right + 8 && state.y >= r.top - 12 && state.y <= r.bottom + 12;
-        });
+        const bounds = containers.map(element => ({ element, rect: element.getBoundingClientRect() }));
+        const contains = (r, marginX = 0, marginY = 0) => state.x >= r.left - marginX && state.x <= r.right + marginX
+            && state.y >= r.top - marginY && state.y <= r.bottom + marginY;
+        // Prefer an actual hit; expanded hit areas of adjacent groups can overlap.
+        const container = (bounds.find(({ rect }) => contains(rect))
+            || bounds.find(({ element, rect }) => element === state.placeholder.parentElement && contains(rect, 8, 12))
+            || bounds.find(({ rect }) => contains(rect, 8, 12)))?.element;
         this.root.querySelectorAll('.sort-target').forEach(el => el.classList.toggle('sort-target', el === container));
         state.valid = !!container;
         if (!container) return;
         container.classList.add('sort-target');
+        const containerRect = bounds.find(({ element }) => element === container).rect;
+        // Layout changes must not generate their own next insertion. Require real
+        // pointer travel after a move; container-relative coordinates also allow
+        // edge auto-scroll to keep advancing with a stationary pointer.
+        const anchorX = state.x - containerRect.left + container.scrollLeft;
+        const anchorY = state.y - containerRect.top + container.scrollTop;
+        if (state.lastPlacement?.container === container
+            && Math.hypot(anchorX - state.lastPlacement.x, anchorY - state.lastPlacement.y) < INSERT_HYSTERESIS) return;
         const placeholderRect = layoutRect(state.placeholder);
         if (state.placeholder.parentElement === container && state.x >= placeholderRect.left - 4 && state.x <= placeholderRect.right + 4 && state.y >= placeholderRect.top - 4 && state.y <= placeholderRect.bottom + 4) return;
         const candidates = this.items(container).map(element => ({ element, rect: layoutRect(element) }));
@@ -180,31 +194,49 @@ export class DragSort {
         if (nearest) {
             const r = nearest.rect;
             const isGrid = getComputedStyle(container).gridTemplateColumns.split(' ').length > 1;
-            const after = isGrid && state.y >= r.top && state.y <= r.bottom
-                ? state.x > r.left + r.width / 2 : state.y > r.top + r.height / 2;
-            reference = after ? nearest.element.nextElementSibling : nearest.element;
+            const horizontal = isGrid && state.y >= r.top && state.y <= r.bottom;
+            const delta = horizontal ? state.x - r.left - r.width / 2 : state.y - r.top - r.height / 2;
+            if (state.placeholder.parentElement === container) {
+                const movingForward = !!(state.placeholder.compareDocumentPosition(nearest.element) & Node.DOCUMENT_POSITION_FOLLOWING);
+                const threshold = Math.min(INSERT_HYSTERESIS, (horizontal ? r.width : r.height) / 4);
+                // Schmitt-trigger style dead band: entering a neighbour is not
+                // enough; cross its midpoint decisively before changing order.
+                if (movingForward ? delta < threshold : delta > -threshold) return;
+            }
+            reference = delta > 0 ? nearest.element.nextElementSibling : nearest.element;
         }
         if (reference === state.placeholder || (state.placeholder.parentElement === container && state.placeholder.nextElementSibling === reference)) return;
         this.flip(() => container.insertBefore(state.placeholder, reference));
+        state.lastPlacement = { container, x: anchorX, y: anchorY };
     }
 
     flip(mutate) {
         const elements = this.items();
-        const before = new Map(elements.map(el => [el, el.getBoundingClientRect()]));
-        this.animations.forEach(animation => animation.cancel());
-        this.animations.clear();
+        // Read visual positions for continuity and untransformed slots for hit
+        // testing. Do not cancel/restart animations whose destination is unchanged.
+        const before = new Map(elements.map(el => [el, { visual: el.getBoundingClientRect(), slot: layoutRect(el) }]));
         mutate();
-        if (reducedMotion()) return;
-        const after = elements.map(el => [el, layoutRect(el)]);
+        const after = elements.filter(el => el.isConnected).map(el => [el, layoutRect(el)]);
+        const reduce = reducedMotion();
+        for (const [el, animation] of this.animations) {
+            if (reduce || !el.isConnected) {
+                animation.cancel();
+                this.animations.delete(el);
+            }
+        }
+        if (reduce) return;
         for (const [el, rect] of after) {
-            const old = before.get(el);
-            const dx = old.left - rect.left;
-            const dy = old.top - rect.top;
+            const { visual, slot } = before.get(el);
+            if (Math.abs(slot.left - rect.left) + Math.abs(slot.top - rect.top) < 1) continue;
+            this.animations.get(el)?.cancel();
+            this.animations.delete(el);
+            const dx = visual.left - rect.left;
+            const dy = visual.top - rect.top;
             if (Math.abs(dx) + Math.abs(dy) < 1) continue;
             const animation = el.animate([
                 { transform: `translate3d(${dx}px, ${dy}px, 0)` },
                 { transform: 'translate3d(0, 0, 0)' }
-            ], { duration: 340, easing: SPRING });
+            ], { duration: SORT_DURATION, easing: SORT_EASING });
             this.animations.set(el, animation);
             animation.onfinish = () => { if (this.animations.get(el) === animation) this.animations.delete(el); };
         }
@@ -232,7 +264,7 @@ export class DragSort {
             const animation = state.ghost.animate([
                 { transform: state.ghost.style.transform, opacity: 1 },
                 { transform: `translate3d(${rect.left}px, ${rect.top}px, 0) scale(1)`, opacity: 1 }
-            ], { duration: 260, easing: SPRING, fill: 'forwards' });
+            ], { duration: 240, easing: SORT_EASING, fill: 'forwards' });
             await animation.finished.catch(() => {});
         }
         const originalNext = state.marker.nextElementSibling;

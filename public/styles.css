@@ -108,15 +108,34 @@ main { overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 20px 2
 .category-section h2::after { content: ''; height: 1px; flex: 1; margin-left: 6px; background: var(--border-color); }
 .link-container { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--link-card-min-width)), 1fr)); gap: 10px; min-height: 64px; }
 .link-container > * { min-width: 0; }
-.link-card { padding: 10px 12px !important; border-radius: 14px !important; background: var(--surface-color); box-shadow: var(--shadow); cursor: grab; }
+.link-card { padding: 9px 12px !important; border-radius: 14px !important; background: var(--surface-color); box-shadow: var(--shadow); cursor: grab; }
 .card-hover { transition: box-shadow 240ms var(--ease-out), border-color 240ms, background-color 240ms; }
 @media (hover: hover) {
     .card-hover:hover { border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border-color)); box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--accent-color) 25%, transparent); }
 }
-.card-icon { width: 34px; height: 34px; padding: 6px; border-radius: 10px; background: var(--bg-color); }
+.card-icon {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: var(--bg-color); border: 1px solid var(--border-color);
+}
+/* Pending is deliberately neutral, never a temporary replacement logo. */
+.card-icon.has-fallback {
+    color: hsl(var(--badge-hue) 58% 40%);
+    background: linear-gradient(145deg, hsl(var(--badge-hue) 85% 96%), hsl(var(--badge-hue) 72% 87%));
+    border: 1px solid hsl(var(--badge-hue) 55% 82% / .65);
+}
+.site-monogram { visibility: hidden; position: relative; display: grid; place-items: center; width: 100%; height: 100%; font-size: 22px; font-weight: 750; line-height: 1; }
+.site-monogram::after { content: ''; position: absolute; top: 5px; right: 5px; width: 4px; height: 4px; border-radius: 1px; background: currentColor; opacity: .3; transform: rotate(45deg); }
+.site-favicon { position: absolute; width: 30px; height: 30px; object-fit: contain; opacity: 0; }
+.has-favicon .site-favicon { opacity: 1; }
+.has-fallback .site-monogram { visibility: visible; }
+.dark .card-icon.has-fallback {
+    color: hsl(var(--badge-hue) 80% 83%);
+    background: linear-gradient(145deg, hsl(var(--badge-hue) 32% 26%), hsl(var(--badge-hue) 35% 18%));
+    border-color: hsl(var(--badge-hue) 35% 42% / .6);
+}
 .link-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px !important; line-height: 18px !important; }
 .link-host { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: inherit !important; font-size: 10px !important; line-height: 14px; margin-top: 2px !important; }
-.card-footer { margin-top: 4px; }
+.card-footer { margin-top: 2px; }
 .card-actions button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; }
 .link-drag-handle { min-width: 28px; min-height: 26px; padding: 0 5px; border-radius: 7px; opacity: .6; transition: opacity 180ms, background-color 180ms; }
 .link-drag-handle:hover { opacity: 1; background: var(--surface-hover); }
@@ -157,12 +176,25 @@ main { overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 20px 2
 .toast { background: var(--glass); color: var(--text-main); border: 1px solid var(--border-color); padding: 14px 20px; border-radius: 16px; font-size: 13px; font-weight: 500; box-shadow: 0 12px 40px #0d244026; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); animation: slide-in 320ms var(--spring); pointer-events: auto; width: min(100%, 24rem); transition: opacity 200ms, transform 200ms; }
 @keyframes slide-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .animate-fade-in { animation: slide-in 320ms var(--ease-out); }
-::view-transition-old(root), ::view-transition-new(root), ::view-transition-group(root) { animation: none; mix-blend-mode: normal; }
+/* The new root snapshot is live: color/shadow transitions underneath it would
+   repaint the page throughout the reveal. Settle them before capture and keep
+   unrelated CSS animations paused until the snapshot overlay is gone. */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+    transition: none !important;
+    animation-play-state: paused !important;
+}
+::view-transition-old(root), ::view-transition-new(root), ::view-transition-group(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
 ::view-transition-image-pair(root) { isolation: isolate; }
-::view-transition-new(root) { animation: theme-reveal-in 500ms var(--ease-out) forwards; }
-@keyframes theme-reveal-in {
-    from { clip-path: circle(0 at var(--theme-reveal-x, 50vw) var(--theme-reveal-y, 50vh)); }
-    to { clip-path: circle(var(--theme-reveal-radius, 150vmax) at var(--theme-reveal-x, 50vw) var(--theme-reveal-y, 50vh)); }
+::view-transition-old(root) { z-index: 0; }
+::view-transition-new(root) {
+    z-index: 1;
+    will-change: clip-path;
 }
 @media (max-width: 1100px) {
     .category-sidebar { width: 196px; flex-basis: 196px; padding-inline: 6px; }
@@ -198,7 +230,8 @@ main { overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 20px 2
 }
 @media (max-width: 400px) {
     header > div { gap: 8px !important; }
-    .list-view .card-icon, .sort-list-ghost .card-icon { width: 28px; height: 28px; padding: 4px; }
+    .list-view .card-icon, .sort-list-ghost .card-icon { width: 36px; height: 36px; }
+    .list-view .site-favicon, .sort-list-ghost .site-favicon { width: 26px; height: 26px; }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

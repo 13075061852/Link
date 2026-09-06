@@ -29,8 +29,9 @@ export function sanitizeIconName(icon, fallback = 'folder') {
 export function getFaviconUrl(url) {
     try {
         const urlObj = new URL(url);
-        // 使用多个favicon服务以提高可靠性
-        return `https://www.google.com/s2/favicons?sz=64&domain=${urlObj.hostname}`;
+        // TYPE/SIZE allow real icon variants; omitting URL prevents Google's
+        // generic globe fallback (HTTP 200), so missing icons trigger onerror.
+        return `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE&url=${encodeURIComponent(urlObj.origin)}&size=64`;
     } catch (e) {
         return '';
     }

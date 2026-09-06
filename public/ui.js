@@ -1,4 +1,4 @@
-import { escapeHTML, getFaviconUrl, getFaviconUrlAlt, sanitizeIconName } from './utils.js';
+import { escapeHTML, getFaviconUrl, sanitizeIconName } from './utils.js';
 
 export class UI {
     constructor(store) {
@@ -38,11 +38,17 @@ export class UI {
 
     createCardHTML(link) {
         const favicon = getFaviconUrl(link.url);
-        const faviconAlt = getFaviconUrlAlt(link.url);
         const hostname = new URL(link.url).hostname.replace(/^www\./, '');
         const iconData = link.iconData;
         const iconSrc = iconData || favicon;
-        const fallbackSrc = iconData ? favicon : faviconAlt;
+        const fallbackSrc = iconData ? favicon : '';
+        // Google's missing-icon response contains a decodable 16px globe even
+        // with HTTP 404. <img> can fire load for it, not error. Remote icons must
+        // be at least 24px to replace the badge; never upscale tiny placeholders.
+        // Explicitly uploaded icons are exempt from this quality threshold.
+        const initial = (Array.from(link.title.trim()).find(char => /[\p{L}\p{N}]/u.test(char)) || hostname[0] || 'L').toUpperCase();
+        // Stable per-site colors, without storing extra data or fetching images.
+        const hue = [215, 255, 175, 330, 28, 195][Array.from(hostname).reduce((hash, char) => (hash * 31 + char.codePointAt(0)) >>> 0, 0) % 6];
         const safeId = escapeHTML(link.id);
         const safeTitle = escapeHTML(link.title);
         const safeUrl = escapeHTML(link.url);
@@ -54,15 +60,16 @@ export class UI {
             <div class="link-card group relative h-full overflow-hidden rounded-2xl border border-border bg-surface p-3 card-hover select-none" data-link-card data-link-id="${safeId}" draggable="false">
                 <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
                 <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" draggable="false" class="card-link flex min-w-0 items-center gap-2">
-                    <div class="card-icon relative flex flex-shrink-0 items-center justify-center overflow-hidden border border-border bg-background">
+                    <div class="card-icon relative flex flex-shrink-0 items-center justify-center overflow-hidden" style="--badge-hue: ${hue}" aria-hidden="true">
+                        <span class="site-monogram">${escapeHTML(initial)}</span>
                         <img
                             src="${safeIconSrc}"
                             alt="" loading="lazy" decoding="async" draggable="false"
-                            class="w-full h-full object-contain"
-                            data-fallback="${safeFallbackSrc}"
-                            onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.dataset.fallback='';}else{this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');}"
+                            class="site-favicon"
+                            data-fallback="${safeFallbackSrc}" data-remote="${!iconData}"
+                            onload="if(this.dataset.remote==='true' && Math.min(this.naturalWidth,this.naturalHeight)<24){this.parentElement.classList.remove('has-favicon');this.parentElement.classList.add('has-fallback');this.hidden=true;}else{this.hidden=false;this.parentElement.classList.remove('has-fallback');this.parentElement.classList.add('has-favicon');}"
+                            onerror="this.parentElement.classList.remove('has-favicon','has-fallback');if(this.dataset.fallback){const src=this.dataset.fallback;this.dataset.fallback='';this.dataset.remote='true';this.src=src;}else{this.hidden=true;this.parentElement.classList.add('has-fallback');}"
                         >
-                        <i data-lucide="link" class="hidden w-8 h-8 text-textMuted"></i>
                     </div>
                     <div class="flex-1 min-w-0 max-w-full">
                         <h3 class="link-title pr-1 text-sm font-semibold leading-snug text-textMain" title="${safeTitle}">${safeTitle}</h3>

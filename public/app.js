@@ -77,11 +77,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     themeBtn.addEventListener('click', (event) => {
         startThemeReveal({
             themeManager,
-            store,
             trigger: themeBtn,
             x: event.clientX,
-            y: event.clientY,
-            onThemeChanged: () => renderCategoryNav(store, ui)
+            y: event.clientY
         });
     });
 
@@ -148,11 +146,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     mobileThemeBtn.addEventListener('click', (event) => {
         startThemeReveal({
             themeManager,
-            store,
             trigger: mobileThemeBtn,
             x: event.clientX,
-            y: event.clientY,
-            onThemeChanged: () => renderCategoryNav(store, ui)
+            y: event.clientY
         });
     });
 
@@ -829,14 +825,16 @@ function openDeleteConfirmModal({ title, description, bodyHTML, primaryText = 'å
     );
 }
 
-function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function startThemeReveal({ themeManager, trigger, x, y }) {
+    const root = document.documentElement;
 
-    if (prefersReducedMotion) {
+    // Starting another View Transition skips the active one, causing a visible
+    // jump. Keep a single transition in flight, including snapshot capture.
+    if (root.classList.contains('theme-transitioning')) return;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion || !document.startViewTransition) {
         themeManager.toggle();
-        if (typeof onThemeChanged === 'function') {
-            onThemeChanged();
-        }
         return;
     }
 
@@ -847,34 +845,43 @@ function startThemeReveal({ themeManager, trigger, x, y, onThemeChanged }) {
         Math.max(centerX, window.innerWidth - centerX),
         Math.max(centerY, window.innerHeight - centerY)
     );
+    const clipPath = [
+        `circle(0px at ${centerX}px ${centerY}px)`,
+        `circle(${Math.ceil(radius)}px at ${centerX}px ${centerY}px)`
+    ];
 
-    const root = document.documentElement;
-    root.style.setProperty('--theme-reveal-x', `${centerX}px`);
-    root.style.setProperty('--theme-reveal-y', `${centerY}px`);
-    root.style.setProperty('--theme-reveal-radius', `${radius}px`);
-
-    if (!document.startViewTransition) {
+    root.classList.add('theme-transitioning');
+    let transition;
+    try {
+        transition = document.startViewTransition(() => themeManager.toggle());
+    } catch (_) {
+        root.classList.remove('theme-transitioning');
         themeManager.toggle();
-        if (typeof onThemeChanged === 'function') {
-            onThemeChanged();
-        }
-        root.style.removeProperty('--theme-reveal-x');
-        root.style.removeProperty('--theme-reveal-y');
-        root.style.removeProperty('--theme-reveal-radius');
         return;
     }
 
-    const transition = document.startViewTransition(() => {
-        themeManager.toggle();
-        if (typeof onThemeChanged === 'function') {
-            onThemeChanged();
-        }
+    // Only the snapshot reveal should animate, not each card's colors/shadows.
+    // CSS and WAAPI clip-path both depend on the browser's compositing support.
+    let reveal;
+    transition.ready.then(() => {
+        reveal = root.animate(
+            { clipPath },
+            {
+                duration: 620,
+                easing: 'cubic-bezier(.4, 0, .2, 1)',
+                fill: 'both',
+                pseudoElement: '::view-transition-new(root)'
+            }
+        );
+    }).catch(() => {
+        // Hidden documents can reject ready; animation setup can also fail.
+        // Skipping still lets the update callback apply the requested theme.
+        transition.skipTransition();
     });
 
-    transition.finished.finally(() => {
-        root.style.removeProperty('--theme-reveal-x');
-        root.style.removeProperty('--theme-reveal-y');
-        root.style.removeProperty('--theme-reveal-radius');
+    transition.finished.catch(() => {}).finally(() => {
+        reveal?.cancel();
+        root.classList.remove('theme-transitioning');
     });
 }
 

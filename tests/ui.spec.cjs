@@ -55,6 +55,108 @@ test('compact layout: aligned brand and only links in the main canvas', async ({
     await page.screenshot({ path: 'test-results/compact-desktop.png', fullPage: true });
 });
 
+test('larger favicons and local monograms handle missing site icons in both themes', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.route('https://t2.gstatic.com/faviconV2?**', route => {
+        const url = new URL(route.request().url());
+        expect(url.searchParams.get('fallback_opts')).toBe('TYPE,SIZE');
+        if (url.searchParams.get('url') === 'https://github.com') {
+            return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="12" fill="#3478f6"/></svg>' });
+        }
+        return route.fulfill({ status: 404, body: '' });
+    });
+    await boot(page);
+    const icon = page.locator('[data-link-id="a"] .card-icon');
+    await expect(icon.locator('img')).toBeHidden();
+    await expect(icon.locator('.site-monogram')).toHaveText('L');
+    await expect(icon.locator('.site-monogram')).toBeVisible();
+    const realIcon = page.locator('[data-link-id="c"] .card-icon');
+    await expect(realIcon).toHaveClass(/has-favicon/);
+    expect((await realIcon.locator('img').boundingBox()).width).toBe(30);
+    expect((await icon.boundingBox()).width).toBe(42);
+    await page.screenshot({ path: 'test-results/card-icons-light.png' });
+    await page.locator('#theme-toggle').click();
+    await expect(page.locator('html')).not.toHaveClass(/theme-transitioning/);
+    await expect(icon.locator('.site-monogram')).toBeVisible();
+    await page.screenshot({ path: 'test-results/card-icons-dark.png' });
+});
+
+test('reported missing-logo sites show designed badges rather than globes', async ({ page }) => {
+    await page.setViewportSize({ width: 1240, height: 800 });
+    await page.emulateMedia({ colorScheme: 'light' });
+    // Real response: HTTP 404 still carries a decodable PNG and fires img.load.
+    await page.route('https://t2.gstatic.com/faviconV2?**', route => route.fulfill({
+        status: 404, contentType: 'image/png', path: require('path').join(__dirname, 'fixtures/google-default-favicon.png')
+    }));
+    const payload = data();
+    payload.links = [
+        { id: 'cn2', title: '高速CN2服务器', url: 'https://d.m123.org/', categoryId: 'work', createdAt: 3 },
+        { id: 'vultr', title: 'VULTR服务器', url: 'https://console.vultr.com/', categoryId: 'work', createdAt: 2 },
+        { id: 'hk', title: '香港高速', url: 'https://www.gbjson.cn/nodes', categoryId: 'work', createdAt: 1 }
+    ];
+    await boot(page, payload);
+    await expect(page.locator('.site-monogram')).toHaveText(['高', 'V', '香']);
+    await expect(page.locator('.card-icon.has-favicon')).toHaveCount(0);
+    for (const image of await page.locator('.site-favicon').all()) await expect(image).toBeHidden();
+    await page.locator('.link-container[data-category-id="work"]').screenshot({ path: 'test-results/missing-logo-badges-light.png' });
+    await page.locator('#theme-toggle').click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.locator('html')).not.toHaveClass(/theme-transitioning/);
+    await page.locator('.link-container[data-category-id="work"]').screenshot({ path: 'test-results/missing-logo-badges-dark.png' });
+});
+
+test('pending logos never flash a fallback badge, including after refresh', async ({ page }) => {
+    let release;
+    let gate = new Promise(resolve => { release = resolve; });
+    await page.route('https://t2.gstatic.com/faviconV2?**', async route => {
+        await gate;
+        const site = new URL(route.request().url()).searchParams.get('url');
+        if (site === 'https://github.com') {
+            return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#3478f6"/></svg>' });
+        }
+        return route.fulfill({ status: 404, body: '' });
+    });
+    try {
+        await boot(page);
+        for (let pass = 0; pass < 2; pass++) {
+            if (pass) {
+                gate = new Promise(resolve => { release = resolve; });
+                await page.reload();
+                await expect(page.locator('#sync-status')).toHaveText('已同步到云端');
+            }
+            const icon = page.locator('[data-link-id="c"] .card-icon');
+            await expect(icon).not.toHaveClass(/has-fallback|has-favicon/);
+            await expect(icon.locator('.site-monogram')).toBeHidden();
+            expect(await icon.evaluate(el => getComputedStyle(el).backgroundImage)).toBe('none');
+            const size = await icon.boundingBox();
+            release();
+            await expect(icon).toHaveClass(/has-favicon/);
+            await expect(icon.locator('.site-monogram')).toBeHidden();
+            expect(await icon.boundingBox()).toEqual(size);
+            await expect(page.locator('[data-link-id="a"] .site-monogram')).toBeVisible();
+        }
+    } finally {
+        release();
+    }
+});
+
+test('HTTP 200 globe stays hidden while small explicitly uploaded icons remain supported', async ({ page }) => {
+    const png = require('fs').readFileSync(require('path').join(__dirname, 'fixtures/google-default-favicon.png'));
+    await page.route('https://t2.gstatic.com/faviconV2?**', route => route.fulfill({ status: 200, contentType: 'image/png', body: png }));
+    const payload = data();
+    payload.links[0].iconData = `data:image/png;base64,${png.toString('base64')}`;
+    await boot(page, payload);
+    const uploaded = page.locator('[data-link-id="a"] .card-icon');
+    await expect(uploaded).toHaveClass(/has-favicon/);
+    for (const id of ['b', 'c', 'd']) {
+        const icon = page.locator(`[data-link-id="${id}"] .card-icon`);
+        await expect(icon.locator('img')).toHaveJSProperty('naturalWidth', 16);
+        await expect(icon.locator('img')).toBeHidden();
+        await expect(icon).not.toHaveClass(/has-favicon/);
+        await expect(icon.locator('.site-monogram')).toBeVisible();
+    }
+});
+
 test('desktop: pointer reorder, cancel and move to an empty category', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1200 });
     const errors = [];
@@ -107,6 +209,68 @@ test('list view, keyboard ordering, search and category ordering', async ({ page
     await page.waitForTimeout(600);
     await page.screenshot({ path: 'test-results/desktop-dark-list.png', fullPage: true });
 });
+
+test('theme reveal animates only the snapshot, preserves DOM and handles repeat clicks', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await boot(page);
+    const result = await page.evaluate(async () => {
+        const root = document.documentElement;
+        const nav = document.querySelector('.category-nav-item');
+        const card = document.querySelector('.link-card');
+        const button = document.getElementById('theme-toggle');
+        const start = document.startViewTransition.bind(document);
+        let transition;
+        let captures = 0;
+        document.startViewTransition = callback => {
+            captures++;
+            transition = start(callback);
+            return transition;
+        };
+        button.click();
+        button.click();
+        await transition.ready;
+        const reveal = document.getAnimations().find(animation =>
+            animation.effect?.pseudoElement === '::view-transition-new(root)');
+        const during = {
+            dark: root.classList.contains('dark'),
+            cardTransition: getComputedStyle(card).transitionDuration,
+            navTransition: getComputedStyle(nav).transitionDuration,
+            revealDuration: reveal?.effect.getTiming().duration,
+            // Color and shadow transitions are the expensive live-snapshot work.
+            liveTransitions: document.getAnimations().filter(animation => animation instanceof CSSTransition).length
+        };
+        await transition.finished;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const cleaned = !root.classList.contains('theme-transitioning');
+        const restored = getComputedStyle(card).transitionDuration;
+        button.click();
+        await transition.finished;
+        return { during, cleaned, restored, captures, sameNav: nav === document.querySelector('.category-nav-item'),
+            sameCard: card === document.querySelector('.link-card'), darkAfterReturn: root.classList.contains('dark') };
+    });
+    expect(result.during).toEqual({ dark: true, cardTransition: '0s', navTransition: '0s', revealDuration: 620, liveTransitions: 0 });
+    expect(result.cleaned).toBe(true);
+    expect(result.restored).not.toBe('0s');
+    expect(result.captures).toBe(2);
+    expect(result.sameNav && result.sameCard).toBe(true);
+    expect(result.darkAfterReturn).toBe(false);
+    expect(errors).toEqual([]);
+});
+
+for (const mode of ['reduced-motion', 'unsupported']) {
+    test(`theme fallback: ${mode}`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: 'light', reducedMotion: mode === 'reduced-motion' ? 'reduce' : 'no-preference' });
+        await boot(page);
+        await page.evaluate(mode => {
+            document.startViewTransition = mode === 'unsupported' ? undefined : () => { throw new Error('Should not capture'); };
+        }, mode);
+        await page.locator('#theme-toggle').click();
+        await expect(page.locator('html')).toHaveClass(/dark/);
+        await expect(page.locator('html')).not.toHaveClass(/theme-transitioning/);
+    });
+}
 
 test('category pointer ordering preserves fixed navigation entries', async ({ page }) => {
     const saves = await boot(page);
