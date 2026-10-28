@@ -1,6 +1,6 @@
 import { generateId, isValidUrl, sanitizeIconName } from './utils.js';
 
-const API_DATA_URL = window.LINK_API_URL || 'https://link-api.1308715689.workers.dev/api/data';
+const API_DATA_URL = window.LINK_API_URL || new URL('api/data', window.location.href).href;
 const REMOTE_DATA_VERSION = 1;
 
 const defaultCategories = [
@@ -79,6 +79,7 @@ export class Store {
         this._revision = 0;
         this._savedRevision = 0;
         this._saving = false;
+        this._etag = null;
     }
 
     async init() {
@@ -88,9 +89,10 @@ export class Store {
         });
 
         if (!response.ok) {
-            throw new Error('无法连接 Cloudflare 存储 API');
+            throw new Error(response.status === 401 ? '请先登录管理后台，再打开收藏页面' : '无法连接收藏存储 API');
         }
 
+        this._etag = response.headers.get('ETag');
         const data = await response.json();
         if (!Array.isArray(data.links) || !Array.isArray(data.categories)) {
             throw new Error('云端数据格式不正确');
@@ -115,15 +117,19 @@ export class Store {
             method: 'PUT',
             headers: {
                 Accept: 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(this._etag ? { 'If-Match': this._etag } : {})
             },
             body: JSON.stringify(this._serialize())
         });
 
         if (!response.ok) {
-            throw new Error('保存到 Cloudflare 失败');
+            if (response.status === 412) throw new Error('其他页面已更新收藏，请先导出当前修改备份，再刷新页面');
+            if (response.status === 401) throw new Error('登录已过期，请重新登录管理后台后重试');
+            throw new Error('保存到服务器失败，当前修改尚未同步');
         }
 
+        this._etag = response.headers.get('ETag') || this._etag;
         return response.json();
     }
 

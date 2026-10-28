@@ -48,6 +48,11 @@ export function getFaviconUrlAlt(url) {
     }
 }
 
+// Touch-first layouts disable drag sorting; the handle is hidden there.
+export function isMobileLayout() {
+    return window.matchMedia('(max-width: 900px)').matches;
+}
+
 export function formatDate(timestamp) {
     return new Intl.DateTimeFormat('zh-CN', {
         year: 'numeric',

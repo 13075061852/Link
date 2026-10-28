@@ -1,4 +1,8 @@
-import { escapeHTML, getFaviconUrl, sanitizeIconName } from './utils.js';
+import { escapeHTML, getFaviconUrl, sanitizeIconName, isMobileLayout } from './utils.js';
+import { icon, createIcons } from './icons.js';
+import { openDialog, closeDialog } from './dialogs.js';
+
+const VIEW_KEY = 'link_view';
 
 export class UI {
     constructor(store) {
@@ -9,21 +13,56 @@ export class UI {
         this.modalContent = document.getElementById('modal-content');
         this.linkForm = document.getElementById('link-form');
         this.modalTitle = document.getElementById('modal-title');
+        this.modalSubtitle = document.getElementById('modal-subtitle');
         this.searchInput = document.getElementById('search-input');
         this.afterRender = null;
-        try { this.view = localStorage.getItem('link_view') === 'list' ? 'list' : 'grid'; }
+        try { this.view = localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'; }
         catch (_) { this.view = 'grid'; }
-        
 
         this.render = this.render.bind(this);
-        this.handleSearch = this.handleSearch.bind(this);
     }
 
     init() {
-        // 默认按分类分组显示
         this.render(this.store.getAll(), true);
         this.setView(this.view);
-        lucide.createIcons();
+        this.setupCardMenus();
+        createIcons();
+    }
+
+    setupCardMenus() {
+        const closeMenu = (menu, restoreFocus = false) => {
+            if (restoreFocus) menu.querySelector('summary')?.focus({ preventScroll: true });
+            menu.open = false;
+        };
+        this.grid.addEventListener('toggle', event => {
+            if (!event.target.matches('.card-menu[open]')) return;
+            this.grid.querySelectorAll('.card-menu[open]').forEach(menu => {
+                if (menu !== event.target) closeMenu(menu);
+            });
+            const menu = event.target;
+            menu.classList.remove('opens-up');
+            const bounds = document.querySelector('.canvas').getBoundingClientRect();
+            menu.classList.toggle('opens-up', menu.querySelector('.card-actions').getBoundingClientRect().bottom > bounds.bottom - 8);
+        }, true);
+        this.grid.addEventListener('click', event => {
+            const menu = event.target.closest('.card-menu');
+            if (menu && event.target.closest('.card-action')) closeMenu(menu, true);
+        });
+        document.addEventListener('click', event => {
+            this.grid.querySelectorAll('.card-menu[open]').forEach(menu => {
+                if (!menu.contains(event.target)) closeMenu(menu);
+            });
+        });
+        document.addEventListener('keydown', event => {
+            const menu = this.grid.querySelector('.card-menu[open]');
+            if (event.key === 'Escape' && menu) {
+                event.preventDefault(); event.stopImmediatePropagation();
+                closeMenu(menu, true);
+            }
+        }, true);
+        document.querySelector('.canvas').addEventListener('scroll', () => {
+            this.grid.querySelectorAll('.card-menu[open]').forEach(menu => closeMenu(menu));
+        }, { passive: true });
     }
 
     setView(view) {
@@ -33,7 +72,7 @@ export class UI {
         document.querySelectorAll('[data-view]').forEach(button => {
             button.setAttribute('aria-pressed', String(button.dataset.view === this.view));
         });
-        try { localStorage.setItem('link_view', this.view); } catch (_) {}
+        try { localStorage.setItem(VIEW_KEY, this.view); } catch (_) {}
     }
 
     createCardHTML(link) {
@@ -42,12 +81,10 @@ export class UI {
         const iconData = link.iconData;
         const iconSrc = iconData || favicon;
         const fallbackSrc = iconData ? favicon : '';
-        // Google's missing-icon response contains a decodable 16px globe even
-        // with HTTP 404. <img> can fire load for it, not error. Remote icons must
-        // be at least 24px to replace the badge; never upscale tiny placeholders.
-        // Explicitly uploaded icons are exempt from this quality threshold.
+        // A missing site icon can still answer with a decodable 16px globe, so
+        // remote images must be at least 24px before they replace the badge.
+        // Explicitly uploaded icons are exempt from that quality threshold.
         const initial = (Array.from(link.title.trim()).find(char => /[\p{L}\p{N}]/u.test(char)) || hostname[0] || 'L').toUpperCase();
-        // Stable per-site colors, without storing extra data or fetching images.
         const hue = [215, 255, 175, 330, 28, 195][Array.from(hostname).reduce((hash, char) => (hash * 31 + char.codePointAt(0)) >>> 0, 0) % 6];
         const safeId = escapeHTML(link.id);
         const safeTitle = escapeHTML(link.title);
@@ -57,10 +94,9 @@ export class UI {
         const safeHostname = escapeHTML(hostname);
 
         return `
-            <div class="link-card group relative h-full overflow-hidden rounded-2xl border border-border bg-surface p-3 card-hover select-none" data-link-card data-link-id="${safeId}" draggable="false">
-                <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
-                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" draggable="false" class="card-link flex min-w-0 items-center gap-2">
-                    <div class="card-icon relative flex flex-shrink-0 items-center justify-center overflow-hidden" style="--badge-hue: ${hue}" aria-hidden="true">
+            <article class="link-card" data-link-card data-link-id="${safeId}" draggable="false">
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" draggable="false" class="card-link">
+                    <span class="card-icon" style="--badge-hue: ${hue}" aria-hidden="true">
                         <span class="site-monogram">${escapeHTML(initial)}</span>
                         <img
                             src="${safeIconSrc}"
@@ -70,221 +106,165 @@ export class UI {
                             onload="if(this.dataset.remote==='true' && Math.min(this.naturalWidth,this.naturalHeight)<24){this.parentElement.classList.remove('has-favicon');this.parentElement.classList.add('has-fallback');this.hidden=true;}else{this.hidden=false;this.parentElement.classList.remove('has-fallback');this.parentElement.classList.add('has-favicon');}"
                             onerror="this.parentElement.classList.remove('has-favicon','has-fallback');if(this.dataset.fallback){const src=this.dataset.fallback;this.dataset.fallback='';this.dataset.remote='true';this.src=src;}else{this.hidden=true;this.parentElement.classList.add('has-fallback');}"
                         >
-                    </div>
-                    <div class="flex-1 min-w-0 max-w-full">
-                        <h3 class="link-title pr-1 text-sm font-semibold leading-snug text-textMain" title="${safeTitle}">${safeTitle}</h3>
-                        <p class="link-host mt-1 font-mono text-xs text-textMuted opacity-80 transition-colors group-hover:text-accent">${safeHostname}</p>
-                    </div>
+                    </span>
+                    <span class="card-copy">
+                        <span class="link-title" title="${safeTitle}">${safeTitle}</span>
+                        <span class="link-host" title="${safeHostname}">${safeHostname}</span>
+                    </span>
                 </a>
-                <div class="card-footer flex items-center justify-between gap-2">
-                    <button type="button" class="link-drag-handle flex min-w-0 items-center gap-1 text-[11px] font-medium text-textMuted" aria-label="排序 ${safeTitle}，按 Alt 加方向键移动" title="拖动手柄排序 · Alt + 方向键">
-                        <i data-lucide="grip-horizontal" class="w-4 h-4 shrink-0"></i>
+                <div class="card-footer">
+                    <button type="button" class="link-drag-handle" aria-label="排序 ${safeTitle}，按 Alt 加方向键移动" title="拖动排序 · Alt + ↑/↓">
+                        ${icon('grip-horizontal')}
                     </button>
-                    <div class="card-actions flex shrink-0 gap-0.5">
-                        <button data-url="${safeUrl}" class="btn-copy p-1.5 rounded-full text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="复制网址" aria-label="复制网址">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-                        </button>
-                        <button data-id="${safeId}" class="btn-edit p-1.5 rounded-full text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors" title="编辑" aria-label="编辑链接">
-                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                        </button>
-                        <button data-id="${safeId}" class="btn-delete p-1.5 rounded-full text-textMuted hover:bg-red-500/10 hover:text-red-500 transition-colors" title="删除" aria-label="删除链接">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                        </button>
-                    </div>
+                    <details class="card-menu">
+                        <summary class="card-more" aria-label="更多操作：${safeTitle}" title="更多操作">${icon('ellipsis')}</summary>
+                        <div class="card-actions">
+                            <button type="button" data-url="${safeUrl}" class="btn-copy card-action" aria-label="复制网址">${icon('copy')}<span>复制网址</span></button>
+                            <button type="button" data-id="${safeId}" class="btn-edit card-action" aria-label="编辑链接">${icon('pencil')}<span>编辑链接</span></button>
+                            <button type="button" data-id="${safeId}" class="btn-delete card-action card-action--danger" aria-label="删除链接">${icon('trash-2')}<span>删除链接</span></button>
+                        </div>
+                    </details>
                 </div>
-            </div>
+            </article>
+        `;
+    }
+
+    sectionHTML(category, links, { heading = true } = {}) {
+        return `
+            <section class="category-section${links.length ? '' : ' is-empty'}">
+                ${heading ? `
+                <div class="section-head">
+                    ${icon(sanitizeIconName(category.icon))}
+                    <h2 class="section-title">${escapeHTML(category.name)}</h2>
+                    <span class="section-count">${links.length}</span>
+                    <span class="section-rule" aria-hidden="true"></span>
+                </div>` : `<h2 class="sr-only">${escapeHTML(category.name)}</h2>`}
+                <div class="link-container${links.length ? '' : ' is-empty'}" data-category-id="${escapeHTML(category.id)}">
+                    ${links.map(link => this.createCardHTML(link)).join('')}
+                </div>
+            </section>
         `;
     }
 
     render(links, groupedByCategory = false) {
         const query = this.searchInput.value.trim();
         const activeId = document.querySelector('.category-nav-item.active')?.dataset.category || 'all';
-        document.getElementById('search-status').textContent = query ? `找到 ${links.length} 个链接，清空搜索后可拖拽排序` : '';
+        document.getElementById('search-status').textContent = query ? `找到 ${links.length} 个链接` : '';
         document.getElementById('clear-search').hidden = !query;
         this.grid.classList.toggle('link-drag-disabled', !!query);
-        this.emptyState.querySelector('h3').textContent = query ? '没有找到匹配的链接' : '留一个位置，给下一个灵感';
-        this.emptyState.querySelector('p').textContent = query ? '试试其他关键词，或清空搜索查看全部收藏。' : '把常用的网站收藏在这里，随时轻松抵达。';
+
+        const title = this.emptyState.querySelector('.empty-title');
+        const text = this.emptyState.querySelector('.empty-text');
+        const emptyButton = this.emptyState.querySelector('#empty-add-btn');
+        if (query) {
+            title.textContent = '没有找到匹配的链接';
+            text.textContent = '换个关键词试试，或清空搜索查看全部收藏。';
+            emptyButton.dataset.action = 'clear';
+            emptyButton.innerHTML = `${icon('search')}<span>清空搜索</span>`;
+        } else if (activeId === 'all') {
+            title.textContent = '留一个位置，给下一个灵感';
+            text.textContent = '把常用的网站收藏在这里，随时轻松抵达。';
+            emptyButton.dataset.action = 'add';
+            emptyButton.innerHTML = `${icon('plus')}<span>添加第一个链接</span>`;
+        } else {
+            title.textContent = '这个分类还是空的';
+            text.textContent = isMobileLayout() ? '添加一条链接，开始整理你的收藏。' : '添加一条链接，或把其他分类的卡片拖进来。';
+            emptyButton.dataset.action = 'add';
+            emptyButton.innerHTML = `${icon('plus')}<span>添加第一个链接</span>`;
+        }
 
         if (links.length === 0) {
             this.grid.innerHTML = '';
-            this.grid.classList.add('hidden');
-            this.emptyState.classList.remove('hidden');
-            this.emptyState.classList.add('flex');
-        } else {
-            this.emptyState.classList.add('hidden');
-            this.emptyState.classList.remove('flex');
-            this.grid.classList.remove('hidden');
-            
-            if (groupedByCategory) {
-                // 按分类分组显示
-                const categories = this.store.getCategories();
-                let html = '';
-                
-                // 如果只显示单个分类的链接，则只渲染该分类
-                if (links.length > 0 && links.every(link => link.categoryId === links[0].categoryId)) {
-                    const categoryId = links[0].categoryId;
-                    const category = categoryId === 'uncategorized' || !categoryId ? 
-                        { id: 'uncategorized', name: '未分类', icon: 'folder' } : 
-                        this.store.getCategoryById(categoryId);
-                    
-                    html += `
-                        <div class="category-section mb-8">
-                            <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
-                                <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
-                                <span class="truncate">${escapeHTML(category.name)}</span>
-                            </h2>
-                            <div class="link-container" data-category-id="${escapeHTML(category.id)}">
-                                ${links.map(link => this.createCardHTML(link)).join('')}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    // 显示所有分类
-                    // 先处理未分类的链接
-                    const uncategorizedLinks = links.filter(link => link.categoryId === 'uncategorized' || !link.categoryId);
-                    if (uncategorizedLinks.length > 0) {
-                        html += `
-                            <div class="category-section mb-8">
-                                <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
-                                    <i data-lucide="folder" class="w-5 h-5 shrink-0"></i>
-                                    <span class="truncate">未分类</span>
-                                </h2>
-                                <div class="link-container" data-category-id="uncategorized">
-                                    ${uncategorizedLinks.map(link => this.createCardHTML(link)).join('')}
-                                </div>
-                            </div>
-                        `;
-                    }
-                    
-                    // 处理其他分类
-                    categories.forEach(category => {
-                        const categoryLinks = links.filter(link => link.categoryId === category.id);
-                        if (categoryLinks.length > 0) {
-                            html += `
-                                <div class="category-section mb-8">
-                                    <h2 class="text-lg font-semibold text-textMain mb-4 flex min-w-0 items-center gap-2">
-                                        <i data-lucide="${sanitizeIconName(category.icon)}" class="w-5 h-5 shrink-0"></i>
-                                        <span class="truncate">${escapeHTML(category.name)}</span>
-                                    </h2>
-                                    <div class="link-container" data-category-id="${escapeHTML(category.id)}">
-                                        ${categoryLinks.map(link => this.createCardHTML(link)).join('')}
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    });
-                }
-                
-                this.grid.innerHTML = html;
-            } else {
-                // 默认平铺显示
-                this.grid.innerHTML = `
-                    <div class="link-container" data-category-id="all">
-                        ${links.map(link => this.createCardHTML(link)).join('')}
-                    </div>
-                `;
-            }
+            this.grid.hidden = true;
+            this.emptyState.hidden = false;
+            createIcons();
+            if (typeof this.afterRender === 'function') this.afterRender();
+            return;
         }
-        // Empty groups remain available as cross-category drop targets.
-        if (groupedByCategory && activeId === 'all' && !query && links.length) {
+
+        this.emptyState.hidden = true;
+        this.grid.hidden = false;
+
+        const uncategorized = { id: 'uncategorized', name: '未分类', icon: 'folder' };
+        let html = '';
+
+        if (groupedByCategory) {
+            if (links.every(link => link.categoryId === links[0].categoryId)) {
+                const categoryId = links[0].categoryId;
+                const category = (!categoryId || categoryId === 'uncategorized')
+                    ? uncategorized
+                    : this.store.getCategoryById(categoryId);
+                html = this.sectionHTML(category, links, { heading: activeId === 'all' });
+            } else {
+                const uncategorizedLinks = links.filter(link => !link.categoryId || link.categoryId === 'uncategorized');
+                if (uncategorizedLinks.length > 0) html += this.sectionHTML(uncategorized, uncategorizedLinks);
+                this.store.getCategories().forEach(category => {
+                    const categoryLinks = links.filter(link => link.categoryId === category.id);
+                    if (categoryLinks.length > 0) html += this.sectionHTML(category, categoryLinks);
+                });
+            }
+        } else {
+            const only = this.store.getCategoryById(links[0].categoryId);
+            html = this.sectionHTML(only, links);
+        }
+
+        this.grid.innerHTML = html;
+
+        // Empty groups stay available as cross-category drop targets.
+        if (groupedByCategory && activeId === 'all' && !query) {
             const present = new Set([...this.grid.querySelectorAll('.link-container')].map(el => el.dataset.categoryId));
-            const categories = [{ id: 'uncategorized', name: '未分类', icon: 'folder' }, ...this.store.getCategories()];
-            for (const category of categories) {
-                if (present.has(category.id)) continue;
+            [uncategorized, ...this.store.getCategories()].forEach(category => {
+                if (present.has(category.id)) return;
                 const section = document.createElement('section');
                 section.className = 'category-section empty-category';
-                section.innerHTML = `<h2><i data-lucide="${sanitizeIconName(category.icon)}" class="w-4 h-4"></i><span>${escapeHTML(category.name)}</span></h2><div class="link-container" data-category-id="${escapeHTML(category.id)}"></div>`;
+                section.innerHTML = this.sectionHTML(category, []);
                 this.grid.append(section);
-            }
-            // Keep empty destinations after actual collections so the first
-            // screen, especially on phones, prioritizes saved links.
+            });
         }
-        this.grid.querySelectorAll('.link-drag-handle').forEach(button => { button.disabled = !!query; });
-        lucide.createIcons();
-        if (typeof this.afterRender === 'function') {
-            this.afterRender();
-        }
-    }
 
-    handleSearch(e, categoryId = 'all') {
-        const query = e.target.value.trim();
-        const results = this.store.search(query, categoryId);
-        const isGroupedByCategory = categoryId === 'all';
-        this.render(results, isGroupedByCategory);
+        this.grid.querySelectorAll('.link-drag-handle').forEach(button => { button.disabled = !!query; });
+        createIcons();
+        if (typeof this.afterRender === 'function') this.afterRender();
     }
 
     openModal(mode = 'add', linkData = null) {
-        this.modalOverlay.classList.remove('hidden');
-
-        requestAnimationFrame(() => {
-            this.modalOverlay.classList.add('open');
-            this.modalContent.classList.add('open');
-        });
-
-        const idInput = document.getElementById('link-id');
-        const titleInput = document.getElementById('link-title');
-        const urlInput = document.getElementById('link-url');
+        const preview = document.getElementById('link-icon-preview');
+        const placeholder = document.getElementById('link-icon-placeholder');
+        const clearBtn = document.getElementById('link-icon-clear');
+        const upload = document.getElementById('link-icon-upload');
 
         if (mode === 'edit' && linkData) {
             this.modalTitle.textContent = '编辑链接';
-            idInput.value = linkData.id;
-            titleInput.value = linkData.title;
-            urlInput.value = linkData.url;
-            
-            // 设置图片预览
+            this.modalSubtitle.textContent = '调整标题、网址或图标，保存后立即同步。';
+            document.getElementById('link-id').value = linkData.id;
+            document.getElementById('link-title').value = linkData.title;
+            document.getElementById('link-url').value = linkData.url;
+
             const iconData = linkData.iconData || '';
-            if (iconData) {
-                const preview = document.getElementById('link-icon-preview');
-                const placeholder = document.getElementById('link-icon-placeholder');
-                const clearBtn = document.getElementById('link-icon-clear');
-                
-                preview.src = iconData;
-                preview.classList.remove('hidden');
-                placeholder.classList.add('hidden');
-                clearBtn.classList.remove('hidden');
-                document.getElementById('link-icon-data').value = iconData;
-            } else {
-                const preview = document.getElementById('link-icon-preview');
-                const placeholder = document.getElementById('link-icon-placeholder');
-                const clearBtn = document.getElementById('link-icon-clear');
-                
-                preview.src = '';
-                preview.classList.add('hidden');
-                placeholder.classList.remove('hidden');
-                clearBtn.classList.add('hidden');
-                document.getElementById('link-icon-data').value = '';
-            }
+            document.getElementById('link-icon-data').value = iconData;
+            preview.src = iconData;
+            preview.hidden = !iconData;
+            placeholder.hidden = !!iconData;
+            clearBtn.hidden = !iconData;
         } else {
             this.modalTitle.textContent = '添加链接';
+            this.modalSubtitle.textContent = '写下标题与网址，稍后随时调整。';
             this.linkForm.reset();
-            idInput.value = '';
-            
-            // 重置图片预览
-            const preview = document.getElementById('link-icon-preview');
-            const placeholder = document.getElementById('link-icon-placeholder');
-            const clearBtn = document.getElementById('link-icon-clear');
-            const upload = document.getElementById('link-icon-upload');
-            
+            document.getElementById('link-id').value = '';
             preview.src = '';
-            preview.classList.add('hidden');
-            placeholder.classList.remove('hidden');
-            clearBtn.classList.add('hidden');
+            preview.hidden = true;
+            placeholder.hidden = false;
+            clearBtn.hidden = true;
             upload.value = '';
             document.getElementById('link-icon-data').value = '';
         }
-        
-        titleInput.focus();
-    }
 
+        openDialog(this.modalOverlay, this.modalContent);
+        createIcons();
+        document.getElementById('link-title').focus();
+    }
     closeModal() {
-        this.modalOverlay.classList.remove('open');
-        this.modalContent.classList.remove('open');
-        
-        setTimeout(() => {
-            if (this.modalOverlay.classList.contains('open')) return;
-            this.modalOverlay.classList.add('hidden');
-            this.linkForm.reset();
-        }, 200); // Match CSS transition duration
+        closeDialog(this.modalOverlay, this.modalContent);
     }
 
     showToast(message) {
@@ -292,15 +272,12 @@ export class UI {
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = message;
-        
         container.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.style.opacity = '0';
-            toast.style.transform = 'translateY(20px)';
-            setTimeout(() => toast.remove(), 300);
+            toast.style.transform = 'translateY(8px)';
+            setTimeout(() => toast.remove(), 220);
         }, 3000);
     }
-
-
 }

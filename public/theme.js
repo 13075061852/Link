@@ -15,12 +15,13 @@ export class ThemeManager {
         } else {
             document.documentElement.classList.remove('dark');
         }
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.isDark() ? '#101012' : '#f5f5f7');
     }
 
     toggle() {
         const isDark = document.documentElement.classList.toggle('dark');
         try { localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light'); } catch (_) {}
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#10141d' : '#f5f7fb');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#101012' : '#f5f5f7');
         return isDark;
     }
 

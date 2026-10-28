@@ -8,7 +8,11 @@ http.createServer(async (request, response) => {
     const file = path.resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
     if (!file.startsWith(root + path.sep)) { response.writeHead(403).end(); return; }
     try {
+        const content = await fs.readFile(file);
+        if (response.destroyed) return;
         response.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
-        response.end(await fs.readFile(file));
-    } catch (_) { response.writeHead(404).end(); }
+        response.end(content);
+    } catch (_) {
+        if (!response.destroyed && !response.headersSent) response.writeHead(404).end();
+    }
 }).listen(4173, '127.0.0.1');

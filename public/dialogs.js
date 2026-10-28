@@ -1,11 +1,27 @@
-// Focus containment and background isolation shared by all three dialogs.
+// Shared dialog plumbing: open/close animation plus focus containment.
+export function openDialog(overlay, content) {
+    overlay.hidden = false;
+    requestAnimationFrame(() => {
+        overlay.classList.add('open');
+        content.classList.add('open');
+    });
+}
+
+export function closeDialog(overlay, content) {
+    overlay.classList.remove('open');
+    content.classList.remove('open');
+    setTimeout(() => {
+        if (!overlay.classList.contains('open')) overlay.hidden = true;
+    }, 210);
+}
+
 export function setupDialogs() {
     const entries = ['modal', 'category-modal', 'data-modal'].map(id => ({
         overlay: document.getElementById(`${id}-overlay`),
         content: document.getElementById(`${id}-content`),
         close: document.getElementById(`${id}-close`)
     }));
-    const backgrounds = [document.querySelector('header'), document.querySelector('main'), document.querySelector('aside')];
+    const backgrounds = [document.querySelector('.shell')];
     let previous = null;
     let lastOutsideFocus = document.activeElement;
     const returnFocus = new Map();
@@ -17,8 +33,10 @@ export function setupDialogs() {
         content.setAttribute('aria-labelledby', content.id.replace('content', 'title'));
         content.tabIndex = -1;
         close.setAttribute('aria-label', '关闭对话框');
+        // Only the backdrop closes. Comparing geometry breaks when a row is
+        // re-rendered mid-click (the detached target is no longer "inside").
         overlay.addEventListener('click', event => {
-            if (!content.contains(event.target)) close.click();
+            if (event.target === overlay || event.target.classList.contains('dialog-wrap')) close.click();
         });
         content.addEventListener('keydown', event => {
             if (event.key !== 'Tab') return;
@@ -38,7 +56,7 @@ export function setupDialogs() {
     const update = () => {
         const open = entries.filter(entry => entry.overlay.classList.contains('open'));
         const top = open.at(-1);
-        backgrounds.forEach(el => { el.inert = !!top; });
+        backgrounds.forEach(el => { if (el) el.inert = !!top; });
         entries.forEach(entry => { entry.content.inert = !!top && entry !== top; });
         if (top === previous) return;
         if (top) {
@@ -55,5 +73,5 @@ export function setupDialogs() {
         previous = top;
     };
     const observer = new MutationObserver(update);
-    entries.forEach(({ overlay }) => observer.observe(overlay, { attributes: true, attributeFilter: ['class'] }));
+    entries.forEach(({ overlay }) => observer.observe(overlay, { attributes: true, attributeFilter: ['class', 'hidden'] }));
 }

@@ -1,0 +1,28 @@
+[Unit]
+Description=Link private bookmarks
+After=network.target
+
+[Service]
+Type=simple
+User=link
+Group=link
+WorkingDirectory=/opt/link/current
+ExecStart=/usr/bin/node /opt/link/current/server.cjs
+Environment=NODE_ENV=production
+Environment=PORT=8791
+Environment=LINK_DATA_DIR=/var/lib/link
+Environment=LINK_ORIGINS=https://www.gbjson.cn,https://gbjson.cn
+Restart=on-failure
+RestartSec=3
+StateDirectory=link
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/link
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

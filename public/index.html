@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#f5f7fb">
+    <meta name="theme-color" content="#f5f5f7">
     <meta name="description" content="小Link，你的私人链接收藏空间。收藏灵感，轻松抵达。">
     <script>
         try {
@@ -14,372 +14,244 @@
     <title>小Link - 网址管理</title>
     <link rel="icon" type="image/png" href="assets/site-icon.png">
     <link rel="apple-touch-icon" href="assets/site-icon.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        background: 'var(--bg-color)',
-                        surface: 'var(--surface-color)',
-                        surfaceHover: 'var(--surface-hover)',
-                        border: 'var(--border-color)',
-                        textMain: 'var(--text-main)',
-                        textMuted: 'var(--text-muted)',
-                        accent: 'var(--accent-color)',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
-<body class="bg-background text-textMain transition-colors duration-300 h-screen overflow-hidden selection:bg-accent selection:text-white antialiased">
-
-    <div class="ambient-background" aria-hidden="true"></div>
+<body>
+    <a class="skip-link" href="#main-content">跳到收藏内容</a>
     <div id="sort-announcer" class="sr-only" role="status" aria-live="polite"></div>
     <div id="search-status" class="sr-only" role="status" aria-live="polite"></div>
 
-    <div class="relative z-10 flex h-screen flex-col overflow-hidden">
-        <!-- 顶部导航栏 -->
-        <header class="sticky top-0 z-50 backdrop-blur-md border-b border-border bg-background/80 transition-colors duration-300">
-            <div class="mx-auto flex h-16 items-center gap-3 px-4 sm:px-6">
-                <button id="mobile-sidebar-toggle" class="mr-auto flex shrink-0 items-center gap-3 group md:cursor-default" aria-label="展开侧边栏" aria-expanded="false">
-                    <div class="brand-mark p-2 rounded-lg text-white shadow-lg group-hover:scale-105 transition-transform duration-300">
-                        <i data-lucide="layout-grid" class="w-5 h-5"></i>
-                    </div>
-                    <span class="brand-name font-semibold text-lg tracking-tight">小Link</span>
-                </button>
+    <div class="shell">
+        <header class="appbar">
+            <div class="appbar-inner">
+            <div class="sidebar-brand">
+                <button type="button" id="sidebar-toggle" class="icon-button sidebar-toggle" aria-label="打开分类" aria-expanded="false" aria-controls="category-sidebar"><i data-lucide="panel-left"></i></button>
+                <div class="brand">
+                    <span class="brand-mark" aria-hidden="true"><i data-lucide="layout-grid"></i></span>
+                    <span class="brand-text">
+                        <span class="brand-name">小Link</span>
+                        <span class="brand-sub">你的数字收藏空间</span>
+                    </span>
+                </div>
 
-                <button id="clear-search" class="clear-search" hidden>清空搜索</button>
+            </div>
+
+            <div class="topbar-actions">
+                <div class="search-field">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="search-input" aria-label="搜索链接" placeholder="搜索你的收藏" autocomplete="off" spellcheck="false">
+                    <kbd class="search-kbd" aria-hidden="true">/</kbd>
+                    <button type="button" id="clear-search" class="search-clear" aria-label="清空搜索" hidden>
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
                 <div class="view-switch" role="group" aria-label="显示方式">
-                    <button data-view="grid" aria-label="卡片视图" title="卡片视图" aria-pressed="true"><i data-lucide="layout-grid" class="w-4 h-4"></i></button>
-                    <button data-view="list" aria-label="列表视图" title="列表视图" aria-pressed="false"><i data-lucide="list" class="w-4 h-4"></i></button>
+                    <button type="button" data-view="grid" aria-label="卡片视图" title="卡片视图" aria-pressed="true"><i data-lucide="layout-grid"></i></button>
+                    <button type="button" data-view="list" aria-label="列表视图" title="列表视图" aria-pressed="false"><i data-lucide="list"></i></button>
                 </div>
-                <button id="quick-add-btn" class="quick-add" aria-label="添加链接" title="添加链接"><i data-lucide="plus" class="w-4 h-4"></i></button>
-                <div class="desktop-tools hidden items-center justify-end gap-3 md:flex">
-                    <div class="relative group w-64">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted group-focus-within:text-accent transition-colors"></i>
-                        <input type="text" id="search-input" aria-label="搜索链接" placeholder="搜索收藏…  /" class="w-full bg-surface border border-border rounded-full py-1.5 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
-                    </div>
-                    
-                    <button id="theme-toggle" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="切换主题">
-                        <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
-                        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
-                    </button>
+                <button type="button" id="add-btn" class="button button--primary">
+                    <i data-lucide="plus"></i><span class="button-label">添加链接</span>
+                </button>
+            </div>
 
-                    <button id="manage-categories-btn" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="管理分类">
-                        <i data-lucide="folder-closed" class="w-5 h-5"></i>
+            <div class="sidebar-footer">
+                <button type="button" id="sync-status" class="sync-status" disabled aria-live="polite" data-state="saving">
+                    <span class="sync-dot" aria-hidden="true"></span>
+                    <span class="sync-text">正在连接…</span>
+                </button>
+                <div class="sidebar-tools">
+                    <button type="button" id="theme-toggle" class="icon-button" aria-label="切换明暗主题" title="切换主题">
+                        <i data-lucide="moon" class="theme-dark"></i>
+                        <i data-lucide="sun" class="theme-light"></i>
                     </button>
-
-                    <button id="import-btn" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="导入数据" title="导入数据">
-                        <i data-lucide="upload" class="w-5 h-5"></i>
+                    <button type="button" id="import-btn" class="icon-button" aria-label="导入数据" title="导入数据">
+                        <i data-lucide="upload"></i>
                     </button>
-
-                    <button id="export-btn" class="p-2 rounded-full hover:bg-surfaceHover text-textMuted hover:text-textMain transition-all active:scale-95" aria-label="导出数据" title="导出数据">
-                        <i data-lucide="download" class="w-5 h-5"></i>
-                    </button>
-
-                    <button id="add-btn" class="flex shrink-0 items-center gap-2 bg-textMain text-background px-3 py-2 rounded-full text-sm font-medium hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-textMain/10 sm:px-4 sm:py-1.5">
-                        <i data-lucide="plus" class="w-4 h-4"></i>
-                        <span>添加</span>
+                    <button type="button" id="export-btn" class="icon-button" aria-label="导出数据" title="导出数据">
+                        <i data-lucide="download"></i>
                     </button>
                 </div>
+            </div>
             </div>
         </header>
 
-        <!-- 主要内容区域 -->
-        <div class="flex flex-1 min-h-0 overflow-hidden">
-            <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop"></div>
+        <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+        <aside id="category-sidebar" class="category-sidebar" aria-labelledby="sidebar-title" tabindex="-1">
+            <div class="sidebar-heading">
+                <div><p class="eyebrow">COLLECTIONS</p><h2 id="sidebar-title">资料库</h2></div>
+                <button type="button" id="sidebar-close" class="icon-button sidebar-close" aria-label="收起分类"><i data-lucide="x"></i></button>
+            </div>
+            <nav id="category-nav" class="category-nav" aria-label="链接分类"></nav>
+            <button type="button" id="manage-categories-btn" class="button category-manage" aria-label="管理分类" title="管理分类">
+                <i data-lucide="settings"></i><span>管理分类</span>
+            </button>
+        </aside>
 
-            <!-- 分类导航栏 -->
-            <aside class="category-sidebar min-h-0 bg-surface border-r border-border h-full overflow-y-auto">
-                <div class="mobile-sidebar-tools border-b border-border p-3 md:hidden">
-                    <div class="mb-3 flex items-center justify-between">
-                        <div class="font-semibold text-textMain">小Link</div>
-                        <button id="mobile-sidebar-close" class="flex h-9 w-9 items-center justify-center rounded-lg text-textMuted hover:bg-surfaceHover hover:text-textMain" aria-label="收起侧边栏">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="relative group mb-3">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-textMuted group-focus-within:text-accent transition-colors"></i>
-                        <input type="text" id="mobile-search-input" aria-label="搜索链接" placeholder="搜索收藏…" class="w-full bg-background border border-border rounded-full py-2 pl-9 pr-4 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/70">
-                    </div>
-                    <div class="grid grid-cols-4 gap-2">
-                        <button id="mobile-theme-toggle" class="mobile-tool-button" aria-label="切换主题">
-                            <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
-                            <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
-                        </button>
-                        <button id="mobile-manage-categories-btn" class="mobile-tool-button" aria-label="管理分类">
-                            <i data-lucide="folder-closed" class="w-5 h-5"></i>
-                        </button>
-                        <button id="mobile-import-btn" class="mobile-tool-button" aria-label="导入数据" title="导入数据">
-                            <i data-lucide="upload" class="w-5 h-5"></i>
-                        </button>
-                        <button id="mobile-export-btn" class="mobile-tool-button" aria-label="导出数据" title="导出数据">
-                            <i data-lucide="download" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <button id="mobile-add-btn" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-textMain px-4 py-2.5 text-sm font-medium text-background shadow-lg shadow-textMain/10 transition-all hover:opacity-90 active:scale-95">
-                        <i data-lucide="plus" class="w-4 h-4"></i>
-                        <span>添加</span>
+        <div class="workspace">
+            <main class="canvas" id="main-content" tabindex="-1">
+                <h1 id="page-title" class="sr-only">全部收藏</h1>
+                <div id="link-grid" class="link-grid"></div>
+
+                <section id="empty-state" class="empty-state" hidden>
+                    <span class="empty-icon" aria-hidden="true"><i data-lucide="inbox"></i></span>
+                    <h3 class="empty-title">留一个位置，给下一个灵感</h3>
+                    <p class="empty-text">把常用的网站收藏在这里，随时轻松抵达。</p>
+                    <button type="button" id="empty-add-btn" class="button button--primary">
+                        <i data-lucide="plus"></i><span>添加第一个链接</span>
                     </button>
-                </div>
-                <div class="sidebar-heading">资料库 <span>LIBRARY</span></div>
-                <nav class="p-2" id="category-nav" aria-label="链接分类">
-                    <!-- 分类导航项将通过JavaScript动态生成 -->
-                </nav>
-                <button id="sync-status" class="sync-status" disabled aria-live="polite" data-state="saving">正在连接云端…</button>
-            </aside>
-
-            <!-- 页面主要内容 -->
-            <main class="flex-1 min-w-0 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                <div class="content-shell mx-auto">
-                    <div id="empty-state" class="hidden flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-surface/50 py-20 text-center animate-fade-in">
-                        <div class="bg-background p-4 rounded-2xl border border-border mb-4 shadow-sm">
-                            <i data-lucide="inbox" class="w-8 h-8 text-textMuted"></i>
-                        </div>
-                        <h3 class="text-lg font-medium text-textMain mb-1">暂无链接</h3>
-                        <p class="text-textMuted text-sm mb-6">开始收藏你常用的网站吧</p>
-                        <button id="empty-add-btn" class="inline-flex items-center gap-2 rounded-full bg-textMain px-4 py-2 text-sm font-medium text-background shadow-lg shadow-textMain/10 transition-all hover:opacity-90 active:scale-95">
-                            <i data-lucide="plus" class="w-4 h-4"></i>
-                            添加第一个链接
-                        </button>
-                    </div>
-
-                    <div id="link-grid" class="space-y-8">
-                        <!-- Links injected here -->
-                    </div>
-                </div>
+                </section>
             </main>
         </div>
-
-        <!-- Category Management Modal -->
-        <div id="category-modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60] hidden opacity-0 transition-opacity duration-200">
-            <div class="flex min-h-dvh items-start justify-center px-3 py-6 text-center sm:items-center sm:px-4">
-                <div id="category-modal-content" class="relative max-h-[calc(100dvh-3rem)] w-full bg-background rounded-2xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:max-w-2xl scale-95 opacity-0 duration-200">
-                    <div class="px-6 py-5 border-b border-border flex justify-between items-center">
-                        <div>
-                            <h3 class="text-lg font-medium leading-6 text-textMain" id="category-modal-title">管理分类</h3>
-                        </div>
-                        <button id="category-modal-close" class="text-textMuted hover:text-textMain transition-colors">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="max-h-[calc(100dvh-9rem)] overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                        <div class="space-y-6">
-                            <section class="rounded-2xl border border-border bg-surface/60">
-                                <div class="border-b border-border px-5 py-4">
-                                    <h4 class="font-medium text-textMain">添加新分类</h4>
-                                </div>
-                                <form id="category-form" class="space-y-4 p-5">
-                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-                                        <div class="flex-1">
-                                            <input type="text" id="category-name" maxlength="80" aria-label="分类名称" placeholder="分类名称" class="w-full bg-background border border-border rounded-xl px-4 py-3 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50">
-                                        </div>
-                                        <button type="submit" form="category-form" class="h-[50px] shrink-0 px-5 rounded-xl text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md sm:w-auto">添加分类</button>
-                                    </div>
-                                    <div>
-                                        <div class="grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))] gap-2 rounded-2xl border border-border bg-background p-3">
-                                            <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="folder">
-                                            <i data-lucide="folder" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="briefcase">
-                                            <i data-lucide="briefcase" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="gamepad-2">
-                                            <i data-lucide="gamepad-2" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="users">
-                                            <i data-lucide="users" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="book-open">
-                                            <i data-lucide="book-open" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="heart">
-                                            <i data-lucide="heart" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="star">
-                                            <i data-lucide="star" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="shopping-cart">
-                                            <i data-lucide="shopping-cart" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="music">
-                                            <i data-lucide="music" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="camera">
-                                            <i data-lucide="camera" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="code-2">
-                                            <i data-lucide="code-2" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="palette">
-                                            <i data-lucide="palette" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="film">
-                                            <i data-lucide="film" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="wallet">
-                                            <i data-lucide="wallet" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="plane">
-                                            <i data-lucide="plane" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="wrench">
-                                            <i data-lucide="wrench" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="mail">
-                                            <i data-lucide="mail" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="settings">
-                                            <i data-lucide="settings" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="globe">
-                                            <i data-lucide="globe" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="newspaper">
-                                            <i data-lucide="newspaper" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="graduation-cap">
-                                            <i data-lucide="graduation-cap" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="monitor-play">
-                                            <i data-lucide="monitor-play" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="sparkles">
-                                            <i data-lucide="sparkles" class="w-5 h-5"></i>
-                                        </button>
-                                        <button type="button" class="category-icon-option flex h-12 w-12 items-center justify-center rounded-xl border border-border text-textMuted transition-colors hover:bg-surfaceHover hover:text-textMain" data-icon="cpu">
-                                            <i data-lucide="cpu" class="w-5 h-5"></i>
-                                        </button>
-                                    </div>
-                                    <input type="hidden" id="category-icon" value="folder">
-                                </form>
-                            </section>
-                            <section class="rounded-2xl border border-border bg-background">
-                                <div class="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
-                                    <div class="font-medium text-textMain">现有分类</div>
-                                </div>
-                                <div id="category-list" class="max-h-72 overflow-y-auto p-5">
-                                    <!-- Categories will be populated here -->
-                                </div>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Link Modal -->
-        <div id="modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60] hidden opacity-0 transition-opacity duration-200">
-            <div class="flex min-h-dvh items-start justify-center px-3 py-6 text-center sm:items-center sm:px-4">
-                <div id="modal-content" class="relative max-h-[calc(100dvh-3rem)] w-full bg-background rounded-xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:max-w-lg scale-95 opacity-0 duration-200">
-                    <div class="px-6 py-5 border-b border-border flex justify-between items-center">
-                        <h3 class="text-lg font-medium leading-6 text-textMain" id="modal-title">添加链接</h3>
-                        <button id="modal-close" class="text-textMuted hover:text-textMain transition-colors">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <form id="link-form" class="max-h-[calc(100dvh-9rem)] overflow-y-auto px-4 py-5 space-y-5 sm:px-6 sm:py-6">
-                        <input type="hidden" id="link-id">
-                        <div>
-                            <label for="link-title" class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">标题</label>
-                            <input type="text" id="link-title" maxlength="200" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="例如：GitHub">
-                        </div>
-                        <div>
-                            <label for="link-url" class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">网址</label>
-                            <input type="text" inputmode="url" autocapitalize="off" spellcheck="false" id="link-url" required class="w-full bg-surface border border-border rounded-lg px-3 py-2 text-textMain outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all placeholder:text-textMuted/50" placeholder="https://...">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">分类</label>
-                            <div id="link-category-options" class="flex flex-wrap gap-2">
-                                <!-- 分类选项将通过JavaScript动态生成 -->
-                            </div>
-                            <input type="hidden" id="link-category" value="uncategorized">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-textMuted uppercase tracking-wider mb-1.5">图标</label>
-                            <div class="flex flex-col gap-3">
-                                <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                                    <div class="flex-shrink-0">
-                                        <div class="w-16 h-16 rounded-lg bg-surfaceHover border border-border flex items-center justify-center overflow-hidden">
-                                            <img id="link-icon-preview" src="" alt="图标预览" class="w-full h-full object-contain hidden">
-                                            <i data-lucide="image" class="w-8 h-8 text-textMuted" id="link-icon-placeholder"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <label for="link-icon-upload" class="inline-block px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-border text-textMain hover:bg-surfaceHover transition-colors cursor-pointer">
-                                            选择图片
-                                        </label>
-                                        <input type="file" id="link-icon-upload" accept="image/*" class="hidden">
-                                        <input type="hidden" id="link-icon-data" value="">
-                                        <button type="button" id="link-icon-clear" class="ml-2 px-3 py-2 rounded-lg text-sm text-textMuted hover:text-textMain transition-colors hidden">
-                                            清除
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="text-xs text-textMuted">支持 JPG、PNG、GIF，最大 190 KB，建议尺寸 64 × 64 像素</div>
-                            </div>
-                        </div>
-                        
-                        <div class="pt-2 flex flex-wrap justify-end gap-3">
-                            <button type="button" id="modal-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors">取消</button>
-                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">保存</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Toast Container -->
-        <div id="toast-container" role="status" aria-live="polite" class="fixed bottom-4 left-4 right-4 z-[70] flex flex-col gap-2 pointer-events-none sm:bottom-6 sm:left-auto sm:right-6"></div>
-
-        <!-- Data Import/Export Modal -->
-        <div id="data-modal-overlay" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[70] hidden opacity-0 transition-opacity duration-200">
-            <div class="flex min-h-dvh items-start justify-center px-3 py-6 text-center sm:items-center sm:px-4">
-                <div id="data-modal-content" class="relative max-h-[calc(100dvh-3rem)] w-full bg-background rounded-2xl border border-border shadow-2xl text-left overflow-hidden transform transition-all sm:my-8 sm:max-w-2xl scale-95 opacity-0 duration-200">
-                    <div class="px-6 py-5 border-b border-border flex justify-between items-center">
-                        <div>
-                            <h3 class="text-lg font-medium leading-6 text-textMain" id="data-modal-title">数据导出</h3>
-                            <p class="mt-1 text-sm text-textMuted" id="data-modal-description">选择要导出的分类，默认全选。</p>
-                        </div>
-                        <button id="data-modal-close" class="text-textMuted hover:text-textMain transition-colors">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    <div class="max-h-[calc(100dvh-9rem)] overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                        <div id="data-modal-body" class="space-y-4"></div>
-                        <div class="mt-6 flex items-center justify-end gap-3">
-                            <button id="data-modal-secondary" type="button" class="px-4 py-2 rounded-lg text-sm font-medium text-textMuted hover:bg-surfaceHover hover:text-textMain transition-colors">取消</button>
-                            <button id="data-modal-primary" type="button" class="px-4 py-2 rounded-lg text-sm font-medium bg-textMain text-background hover:opacity-90 transition-opacity shadow-md">确认</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="drop-overlay" class="fixed inset-0 z-[80] hidden opacity-0 pointer-events-none scale-95 transition-all duration-200">
-            <div class="flex h-full w-full items-center justify-center bg-background/70 backdrop-blur-sm">
-                <div class="rounded-3xl border-2 border-dashed border-accent bg-surface/90 px-8 py-10 text-center shadow-2xl">
-                    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-                        <i data-lucide="upload-cloud" class="w-6 h-6"></i>
-                    </div>
-                    <div class="text-lg font-semibold text-textMain">拖入 JSON 备份文件即可导入</div>
-                    <div class="mt-2 text-sm text-textMuted">读取完成后可选择覆盖或追加到现有数据。</div>
-                </div>
-            </div>
-        </div>
-
-        <input type="file" id="import-file-input" accept="application/json,.json" class="hidden">
-
-        <script type="module" src="app.js"></script>
     </div>
+
+    <!-- 链接编辑 -->
+    <div id="modal-overlay" class="dialog-overlay" hidden>
+        <div class="dialog-wrap">
+            <div id="modal-content" class="dialog dialog--narrow">
+                <header class="dialog-head">
+                    <div class="dialog-heading">
+                        <h2 id="modal-title" class="dialog-title">添加链接</h2>
+                        <p id="modal-subtitle" class="dialog-sub">写下标题与网址，稍后随时调整。</p>
+                    </div>
+                    <button type="button" id="modal-close" class="icon-button" aria-label="关闭"><i data-lucide="x"></i></button>
+                </header>
+                <form id="link-form" class="dialog-body dialog-form">
+                    <input type="hidden" id="link-id">
+                    <div class="field">
+                        <label for="link-title" class="field-label">标题</label>
+                        <input type="text" id="link-title" maxlength="200" required class="field-input" placeholder="例如：GitHub">
+                    </div>
+                    <div class="field">
+                        <label for="link-url" class="field-label">网址</label>
+                        <input type="text" inputmode="url" autocapitalize="off" spellcheck="false" id="link-url" required class="field-input" placeholder="https://example.com">
+                    </div>
+                    <div class="field">
+                        <span class="field-label">分类</span>
+                        <div id="link-category-options" class="chip-group"></div>
+                        <input type="hidden" id="link-category" value="uncategorized">
+                    </div>
+                    <div class="field">
+                        <span class="field-label">图标</span>
+                        <div class="icon-field">
+                            <div class="icon-preview">
+                                <img id="link-icon-preview" src="" alt="图标预览" hidden>
+                                <span id="link-icon-placeholder"><i data-lucide="image"></i></span>
+                            </div>
+                            <div class="icon-field-actions">
+                                <label for="link-icon-upload" class="button button--quiet">选择图片</label>
+                                <input type="file" id="link-icon-upload" accept="image/*" hidden>
+                                <input type="hidden" id="link-icon-data" value="">
+                                <button type="button" id="link-icon-clear" class="button button--ghost" hidden>清除</button>
+                                <p class="field-hint">JPG、PNG、GIF，最大 190 KB，建议 64 × 64。</p>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="dialog-foot">
+                        <button type="button" id="modal-cancel" class="button button--ghost">取消</button>
+                        <button type="submit" class="button button--primary">保存</button>
+                    </footer>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分类管理 -->
+    <div id="category-modal-overlay" class="dialog-overlay" hidden>
+        <div class="dialog-wrap">
+            <div id="category-modal-content" class="dialog dialog--wide">
+                <header class="dialog-head">
+                    <div class="dialog-heading">
+                        <h2 id="category-modal-title" class="dialog-title">管理分类</h2>
+                        <p class="dialog-sub">为收藏整理分组，所有设备保持同步。</p>
+                    </div>
+                    <button type="button" id="category-modal-close" class="icon-button" aria-label="关闭"><i data-lucide="x"></i></button>
+                </header>
+                <div class="dialog-body dialog-scroll">
+                    <section class="panel">
+                        <h3 class="panel-title">新建分类</h3>
+                        <form id="category-form" class="dialog-form">
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="category-name" class="field-label">名称</label>
+                                    <input type="text" id="category-name" maxlength="80" class="field-input" placeholder="例如：设计灵感">
+                                </div>
+                                <button type="submit" class="button button--primary">添加分类</button>
+                            </div>
+                            <div class="field">
+                                <span class="field-label">图标</span>
+                                <div class="icon-picker">
+                                    <button type="button" class="icon-option is-selected" data-icon="folder" aria-pressed="true"><i data-lucide="folder"></i></button>
+                                    <button type="button" class="icon-option" data-icon="briefcase"><i data-lucide="briefcase"></i></button>
+                                    <button type="button" class="icon-option" data-icon="gamepad-2"><i data-lucide="gamepad-2"></i></button>
+                                    <button type="button" class="icon-option" data-icon="users"><i data-lucide="users"></i></button>
+                                    <button type="button" class="icon-option" data-icon="book-open"><i data-lucide="book-open"></i></button>
+                                    <button type="button" class="icon-option" data-icon="heart"><i data-lucide="heart"></i></button>
+                                    <button type="button" class="icon-option" data-icon="star"><i data-lucide="star"></i></button>
+                                    <button type="button" class="icon-option" data-icon="shopping-cart"><i data-lucide="shopping-cart"></i></button>
+                                    <button type="button" class="icon-option" data-icon="music"><i data-lucide="music"></i></button>
+                                    <button type="button" class="icon-option" data-icon="camera"><i data-lucide="camera"></i></button>
+                                    <button type="button" class="icon-option" data-icon="code-2"><i data-lucide="code-2"></i></button>
+                                    <button type="button" class="icon-option" data-icon="palette"><i data-lucide="palette"></i></button>
+                                    <button type="button" class="icon-option" data-icon="film"><i data-lucide="film"></i></button>
+                                    <button type="button" class="icon-option" data-icon="wallet"><i data-lucide="wallet"></i></button>
+                                    <button type="button" class="icon-option" data-icon="plane"><i data-lucide="plane"></i></button>
+                                    <button type="button" class="icon-option" data-icon="wrench"><i data-lucide="wrench"></i></button>
+                                    <button type="button" class="icon-option" data-icon="mail"><i data-lucide="mail"></i></button>
+                                    <button type="button" class="icon-option" data-icon="settings"><i data-lucide="settings"></i></button>
+                                    <button type="button" class="icon-option" data-icon="globe"><i data-lucide="globe"></i></button>
+                                    <button type="button" class="icon-option" data-icon="newspaper"><i data-lucide="newspaper"></i></button>
+                                    <button type="button" class="icon-option" data-icon="graduation-cap"><i data-lucide="graduation-cap"></i></button>
+                                    <button type="button" class="icon-option" data-icon="monitor-play"><i data-lucide="monitor-play"></i></button>
+                                    <button type="button" class="icon-option" data-icon="sparkles"><i data-lucide="sparkles"></i></button>
+                                    <button type="button" class="icon-option" data-icon="cpu"><i data-lucide="cpu"></i></button>
+                                </div>
+                                <input type="hidden" id="category-icon" value="folder">
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="panel panel--flush">
+                        <h3 class="panel-title panel-title--row">现有分类</h3>
+                        <div id="category-list" class="category-list"></div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入 / 导出 -->
+    <div id="data-modal-overlay" class="dialog-overlay" hidden>
+        <div class="dialog-wrap">
+            <div id="data-modal-content" class="dialog">
+                <header class="dialog-head">
+                    <div class="dialog-heading">
+                        <h2 id="data-modal-title" class="dialog-title">数据导出</h2>
+                        <p id="data-modal-description" class="dialog-sub">选择要导出的分类，默认全选。</p>
+                    </div>
+                    <button type="button" id="data-modal-close" class="icon-button" aria-label="关闭"><i data-lucide="x"></i></button>
+                </header>
+                <div class="dialog-body dialog-scroll">
+                    <div id="data-modal-body" class="stack"></div>
+                    <footer class="dialog-foot">
+                        <button id="data-modal-secondary" type="button" class="button button--ghost">取消</button>
+                        <button id="data-modal-primary" type="button" class="button button--primary">确认</button>
+                    </footer>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
+        <div class="drop-card">
+            <span class="drop-icon"><i data-lucide="upload-cloud"></i></span>
+            <strong>拖入 JSON 备份文件</strong>
+            <span>读取后可以选择覆盖或追加到现有数据。</span>
+        </div>
+    </div>
+
+    <div id="toast-container" role="status" aria-live="polite" class="toast-container"></div>
+    <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+
+    <script type="module" src="app.js"></script>
 </body>
 </html>

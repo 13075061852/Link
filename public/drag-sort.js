@@ -57,7 +57,7 @@ export class DragSort {
         const item = event.target.closest(this.itemSelector);
         if (!item || !this.root.contains(item)) return;
         const handle = event.target.closest(this.handleSelector);
-        if (!handle && (event.pointerType !== 'mouse' || event.target.closest('button, input, select, textarea'))) return;
+        if (!handle && (event.pointerType !== 'mouse' || event.target.closest('button, input, select, textarea, summary'))) return;
         this.state = { item, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
             x: event.clientX, y: event.clientY, started: false, source: item.parentElement };
         activeSorter = this;
