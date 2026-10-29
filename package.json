@@ -3,18 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "test": "node --test tests/store.test.mjs tests/server.test.cjs",
+    "dev": "node scripts/dev.cjs",
+    "test": "node --test tests/store.test.mjs tests/server.test.cjs tests/dev.test.cjs",
     "start": "node server.cjs",
     "test:e2e": "playwright test",
-    "check": "node --check worker.js && node --check public/app.js && node --check public/store.js && node --check public/ui.js && node --check public/utils.js && node --check public/theme.js && node --check public/drag-sort.js && node --check public/dialogs.js && node --check public/data-dialog.js && node --check public/categories.js && node --check public/transfer.js && node --check public/icons.js && node --check public/sidebar.js && node --check server.cjs",
-    "db:migrate": "wrangler d1 migrations apply link_store --remote",
-    "deploy": "wrangler deploy",
-    "deploy:api": "wrangler deploy",
-    "deploy:web": "powershell -ExecutionPolicy Bypass -File scripts/deploy-pages.ps1"
+    "check": "node --check public/app.js && node --check public/store.js && node --check public/ui.js && node --check public/utils.js && node --check public/theme.js && node --check public/drag-sort.js && node --check public/dialogs.js && node --check public/data-dialog.js && node --check public/categories.js && node --check public/transfer.js && node --check public/icons.js && node --check public/sidebar.js && node --check server.cjs && node --check scripts/dev.cjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "wrangler": "^4.0.0"
+    "@playwright/test": "^1.63.0"
   }
 }

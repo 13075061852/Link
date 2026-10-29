@@ -139,7 +139,7 @@ export class Store {
         if (this._saving) return this._saveQueue;
         this._saving = true;
         // Coalesce rapid reorders into the latest snapshot instead of writing
-        // the whole D1 collection once for every intermediate pointer gesture.
+        // the whole collection once for every intermediate pointer gesture.
         this._saveQueue = Promise.resolve().then(async () => {
             try {
                 while (this._savedRevision < this._revision) {

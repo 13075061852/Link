@@ -1,6 +1,6 @@
 # Link
 
-小Link 支持香港服务器独立部署（Node.js + 本地持久化），并保留原 Cloudflare Workers + D1 部署方式。
+小Link 使用 Node.js + 本地持久化，独立部署在香港服务器；本地开发页面通过代理连接香港正式接口。
 
 ## 香港服务器部署
 
@@ -11,7 +11,6 @@
 - 数据采用临时文件、fsync 和原子替换；ETag 防止多个页面互相覆盖。遇到更新冲突，先导出当前页面修改，再刷新后导入合并。
 - 部署模板：`deploy/link.service`、`deploy/link.nginx.conf`。Nginx 模板仅插入已有域名的 HTTPS server 块，不依赖管理后台会话。
 - 首次启动前必须提供有效的 `data.json`；文件缺失或损坏时拒绝启动，不自动创建空收藏。
-- 2026-10-26 已从 D1 迁入 12 个分类、96 条链接。迁移后两端独立保存，**不做双向同步**；原 D1 数据未修改。
 
 本地测试服务器：先把有效导出数据保存为临时目录中的 `data.json`，设置 `LINK_DATA_DIR` 后运行 `npm start`。如需在浏览器编辑，还需将本地源地址加入 `LINK_ORIGINS`（逗号分隔）。不要把不受认证保护的后端直接暴露到公网。
 
@@ -65,46 +64,10 @@ npm install
 npm run dev
 ```
 
-前端默认使用页面所在目录的 `api/data`（服务器部署时为 `/link/api/data`），不再写死 Cloudflare 地址。
+打开 `http://127.0.0.1:8787/`。`npm run dev` 使用无第三方依赖的 Node.js 开发服务器（`scripts/dev.cjs`），提供本地 `public/` 页面，并将 `/api/data` 代理到香港正式接口 `https://www.gbjson.cn/link/api/data`。也支持本地 `/link/` 路径。
 
-使用 `npm run dev` 时仍运行原 Worker，其 D1 绑定为远端模式，会访问正式 D1 数据。原 Cloudflare 后端地址：
+**本地浏览和保存使用香港线上实时数据；保存、删除、导入等操作会直接修改线上收藏，不是沙盒。** 开发代理仅监听 `127.0.0.1`，校验本地 Host 和写请求 Origin，保留 ETag / If-Match 冲突保护，不需要额外登录或本地数据初始化。不要把开发代理暴露到公网。
 
-```text
-https://link-api.1308715689.workers.dev/api/data
-```
+默认端口为 8787，可通过 `PORT` 环境变量覆盖；端口占用时请先停止旧的开发进程再启动。需要 Node.js 20 或以上版本。
 
-如需临时切换后端地址，可在页面加载前设置 `window.LINK_API_URL`。
-
-本地 Worker 的 D1 绑定也配置为远端模式，因此需要已登录 Cloudflare：
-
-```bash
-npx wrangler login
-```
-
-## 数据库初始化
-
-首次部署或新建 D1 数据库后执行：
-
-```bash
-npm run db:migrate
-```
-
-数据库结构由 `migrations/` 管理；不要依赖本地 D1 副本保存正式数据。
-
-## 原 Cloudflare 部署
-
-```bash
-set CLOUDFLARE_API_TOKEN=你的 Cloudflare API Token
-npm run deploy
-```
-
-当前 D1 数据库:
-
-- binding: `DB`
-- name: `link_store`
-- id: `65d61eda-4db4-413d-b832-2636c6849568`
-
-当前已部署后端 Worker:
-
-- name: `link-api`
-- URL: `https://link-api.1308715689.workers.dev/api/data`
+前端默认使用页面所在目录的 `api/data`（服务器部署时为 `/link/api/data`）。如需临时切换后端地址，可在页面加载前设置 `window.LINK_API_URL`。
